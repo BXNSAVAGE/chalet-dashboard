@@ -1,0 +1,12 @@
+name = "chalet-dashboard"
+pages_build_output_dir = "./"
+
+[[ d1_databases ]]
+binding = "DB"
+database_name = "chalet_db"
+database_id = "7ea46358-b505-462d-8718-0e7662073fac"  # use your actual database UUID
+
+[env.production]
+d1_databases = [
+  { binding = "DB", database_name = "chalet_db", database_id = "7ea46358-b505-462d-8718-0e7662073fac" }
+]
