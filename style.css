@@ -1,0 +1,128 @@
+:root {
+  --bg: #f5f7fa;
+  --card: #ffffff;
+  --text: #0b0c0f;
+  --muted: #6b7280;
+  --pending: #f97316;
+  --good: #22c55e;
+}
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  justify-content: center;
+  padding: 20px;
+}
+.app {
+  display: grid;
+  grid-template-columns: 260px 1fr 260px;
+  gap: 20px;
+  width: 100%;
+  max-width: 1200px;
+}
+.today, .timeline {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+.cal {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  position: relative;
+}
+.cal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 10px;
+}
+.cell {
+  aspect-ratio: 1 / 1;
+  position: relative;
+  background: #fff;
+  border: 1px solid #eef0f4;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.cell .date {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.seg {
+  position: absolute;
+  inset: 6px;
+  border-radius: 12px;
+  color: #fff;
+  font-weight: 700;
+  font-size: clamp(10px, 1.3vw, 13px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 6px;
+  word-break: break-word;
+}
+.seg.pending {
+  background: var(--pending);
+}
+.seg.confirm {
+  background: var(--good);
+}
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 20px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.status {
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+}
+.status.pending {
+  background: var(--pending);
+}
+.status.confirm {
+  background: var(--good);
+}
