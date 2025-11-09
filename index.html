@@ -1,62 +1,85 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8">
-  <title>Chalet Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chalet Dashboard — Apple-Style MVP (DE)</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header class="appbar">
-    <h1 id="calTitle"></h1>
-    <div class="legend">
-      <span class="dot pending"></span> Ausstehend
-      <span class="dot confirm"></span> Bestätigt
-    </div>
-    <div class="controls">
-      <button id="prevBtn">‹</button>
-      <button id="todayBtn">Heute</button>
-      <button id="nextBtn">›</button>
+  <header>
+    <div class="brand">🏔️ Chalet Manager</div>
+    <span class="pill">MVP</span>
+    <div style="margin-left:auto;display:flex;gap:8px">
+      <button class="btn secondary" id="checkInboxBtn">Posteingang prüfen</button>
+      <button class="btn" id="addBookingBtn">Buchung hinzufügen</button>
     </div>
   </header>
-  <div class="layout">
-    <aside id="todayPanel">
-      <h2>Heute</h2>
-      <div id="todayCard"></div>
-    </aside>
-    <main>
-      <div class="calendar">
-        <div class="weekday-row">
-          <div class="cell header">Mo</div>
-          <div class="cell header">Di</div>
-          <div class="cell header">Mi</div>
-          <div class="cell header">Do</div>
-          <div class="cell header">Fr</div>
-          <div class="cell header">Sa</div>
-          <div class="cell header">So</div>
+
+  <main class="grid">
+    <aside>
+      <div class="card">
+        <h3>Heute</h3>
+        <div class="stat" style="margin-top:8px">
+          <div>
+            <div style="font-weight:800">Nächster Termin</div>
+            <div style="color:var(--muted);font-size:14px">Novak — Anreise 15:00</div>
+          </div>
+          <span class="tag confirm">BESTÄTIGT</span>
         </div>
-        <div id="calGrid" class="cal-grid"></div>
       </div>
-    </main>
-    <aside id="inboxPanel">
-      <h2>Posteingang</h2>
-      <div id="timeline"></div>
     </aside>
-  </div>
-  <div id="overlay" class="overlay hidden">
+
+    <section class="card calendar">
+      <div class="cal-head">
+        <div class="cal-title" id="calTitle">Kalender</div>
+        <div class="legend">
+          <span class="dot pending"></span> Ausstehend
+          <span class="dot confirm" style="margin-left:12px"></span> Bestätigt
+        </div>
+        <div class="cal-controls">
+          <button class="btn secondary" id="prevBtn">‹</button>
+          <button class="btn secondary" id="todayBtn">Heute</button>
+          <button class="btn secondary" id="nextBtn">›</button>
+        </div>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+    </section>
+
+    <section>
+      <div class="card">
+        <h3>Posteingang – Verlauf</h3>
+        <div class="timeline" id="timeline">
+          <div class="tl-item"><div class="tl-time">09:12</div><div class="tl-card">Anfrage: 3.–6. Jan (2 Erwachsene)</div></div>
+          <div class="tl-item"><div class="tl-time">08:01</div><div class="tl-card">Anzahlung eingegangen — Novak</div></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="overlay" id="overlay">
     <div class="modal">
-      <button id="closeBtn" class="close">×</button>
-      <h3 id="mTitle"></h3>
-      <p><span id="mStatusTag" class="status-tag"></span></p>
-      <p>Gast: <span id="mGuest"></span></p>
-      <p>Zeitraum: <span id="mDates"></span></p>
-      <p>Gäste: <span id="mGuests"></span></p>
-      <p>Betrag: <span id="mAmount"></span></p>
-      <p>E-Mail: <span id="mEmail"></span></p>
-      <h4>Email Verlauf</h4>
-      <div id="mEmails" class="emails"></div>
+      <div class="modal-head">
+        <div class="modal-title" id="mTitle">Buchung</div>
+        <button class="btn ghost" id="mClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="row"><label>Gast</label><div id="mGuest">—</div></div>
+        <div class="row"><label>Status</label><div id="mStatus">—</div></div>
+        <div class="row"><label>Zeitraum</label><div id="mDates">—</div></div>
+        <div class="row"><label>E-Mail</label><div id="mEmail">—</div></div>
+        <div class="row"><label>Betrag</label><div id="mAmount">—</div></div>
+        <div class="row"><label>Gäste</label><div id="mGuests">—</div></div>
+        <div class="emails" id="mEmails"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn">Zahlung bestätigen</button>
+        <button class="btn secondary">Erinnerung senden</button>
+        <button class="btn ghost">Bei TVB öffnen</button>
+      </div>
     </div>
   </div>
+
   <script src="main.js"></script>
 </body>
 </html>
