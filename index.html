@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Chalet Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="appbar">
+    <h1 id="calTitle"></h1>
+    <div class="legend">
+      <span class="dot pending"></span> Ausstehend
+      <span class="dot confirm"></span> Bestätigt
+    </div>
+    <div class="controls">
+      <button id="prevBtn">‹</button>
+      <button id="todayBtn">Heute</button>
+      <button id="nextBtn">›</button>
+    </div>
+  </header>
+  <div class="layout">
+    <aside id="todayPanel">
+      <h2>Heute</h2>
+      <div id="todayCard"></div>
+    </aside>
+    <main>
+      <div class="calendar">
+        <div class="weekday-row">
+          <div class="cell header">Mo</div>
+          <div class="cell header">Di</div>
+          <div class="cell header">Mi</div>
+          <div class="cell header">Do</div>
+          <div class="cell header">Fr</div>
+          <div class="cell header">Sa</div>
+          <div class="cell header">So</div>
+        </div>
+        <div id="calGrid" class="cal-grid"></div>
+      </div>
+    </main>
+    <aside id="inboxPanel">
+      <h2>Posteingang</h2>
+      <div id="timeline"></div>
+    </aside>
+  </div>
+  <div id="overlay" class="overlay hidden">
+    <div class="modal">
+      <button id="closeBtn" class="close">×</button>
+      <h3 id="mTitle"></h3>
+      <p><span id="mStatusTag" class="status-tag"></span></p>
+      <p>Gast: <span id="mGuest"></span></p>
+      <p>Zeitraum: <span id="mDates"></span></p>
+      <p>Gäste: <span id="mGuests"></span></p>
+      <p>Betrag: <span id="mAmount"></span></p>
+      <p>E-Mail: <span id="mEmail"></span></p>
+      <h4>Email Verlauf</h4>
+      <div id="mEmails" class="emails"></div>
+    </div>
+  </div>
+  <script src="main.js"></script>
+</body>
+</html>
