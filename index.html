@@ -268,9 +268,9 @@
         </div>
         <div class="row editable">
           <label>Status</label>
-          <select id="mStatus">
-            <option value="pending">Ausstehend</option>
-            <option value="confirm">Bestätigt</option>
+          <select id="mStatus" style="padding: 10px 12px; font-weight: 600;">
+            <option value="pending" style="background: #ffedd5; color: #ea580c;">🟠 Ausstehend</option>
+            <option value="confirm" style="background: #dcfce7; color: #16a34a;">🟢 Bestätigt</option>
           </select>
         </div>
         <div class="row editable full-width">
@@ -413,15 +413,20 @@ async function saveBooking(booking) {
     updateNextAppointment();
     return true;
   } catch (err) {
-    console.error('❌ Error saving booking:', err);
+    console.error('❌ Error saving booking, using local storage:', err);
     // For demo: add to local array
     if (isNewBooking) {
       booking.id = Date.now().toString();
       bookings.push(booking);
+      console.log('Added new booking:', booking);
     } else {
       const idx = bookings.findIndex(b => b.id === booking.id);
-      if (idx !== -1) bookings[idx] = booking;
+      if (idx !== -1) {
+        bookings[idx] = booking;
+        console.log('Updated booking:', booking);
+      }
     }
+    console.log('Current bookings:', bookings);
     buildMonth(view);
     updateNextAppointment();
     return true;
