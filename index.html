@@ -460,7 +460,7 @@ function updateNextAppointment() {
     
     widget.innerHTML = `
       <div>
-        <div style="font-weight:800">Nächster Termin</div>
+        
         <div style="color:var(--muted);font-size:14px">${next.guest} — ${isToday ? 'Heute' : formatDateEU(next.start)} Anreise</div>
       </div>
       <span class="tag ${next.status}">${next.status === 'confirm' ? 'BESTÄTIGT' : 'AUSSTEHEND'}</span>
@@ -468,7 +468,7 @@ function updateNextAppointment() {
   } else {
     widget.innerHTML = `
       <div>
-        <div style="font-weight:800">Nächster Termin</div>
+        
         <div style="color:var(--muted);font-size:14px">Keine bevorstehenden Buchungen</div>
       </div>
       <span class="tag confirm">—</span>
