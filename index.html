@@ -4,242 +4,33 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Chalet Dashboard — Apple-Style MVP (DE)</title>
+  <link rel="stylesheet" href="style.css" />
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    :root {
-      --bg: #f5f5f7;
-      --card: #ffffff;
-      --text: #1d1d1f;
-      --muted: #86868b;
-      --border: #d2d2d7;
-      --primary: #0071e3;
-      --primary-hover: #0077ed;
-      --pending: #ff9500;
-      --confirm: #34c759;
-      --radius: 12px;
-    }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.5;
-    }
-    header {
-      background: var(--card);
-      border-bottom: 1px solid var(--border);
-      padding: 16px 24px;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-    .brand { font-size: 20px; font-weight: 700; }
-    .pill {
-      background: var(--pending);
-      color: white;
-      padding: 4px 12px;
-      border-radius: 12px;
-      font-size: 12px;
-      font-weight: 600;
-    }
-    .btn {
-      background: var(--primary);
-      color: white;
-      border: none;
-      padding: 8px 16px;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    .btn:hover { background: var(--primary-hover); }
-    .btn.secondary {
-      background: var(--bg);
-      color: var(--text);
-    }
-    .btn.ghost {
-      background: transparent;
-      color: var(--text);
-    }
-    .grid {
-      display: grid;
-      grid-template-columns: 300px 1fr 300px;
-      gap: 24px;
-      padding: 24px;
-      max-width: 1600px;
-      margin: 0 auto;
-    }
-    .card {
-      background: var(--card);
-      border-radius: var(--radius);
-      padding: 20px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    }
-    .cal-head {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      margin-bottom: 16px;
-      flex-wrap: wrap;
-    }
-    .cal-title { font-size: 18px; font-weight: 700; }
-    .legend {
-      display: flex;
-      align-items: center;
-      font-size: 13px;
-      color: var(--muted);
-    }
-    .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      margin-right: 4px;
-    }
-    .dot.pending { background: var(--pending); }
-    .dot.confirm { background: var(--confirm); }
-    .cal-controls {
-      margin-left: auto;
-      display: flex;
-      gap: 8px;
-    }
-    .cal-grid {
-      display: grid;
-      grid-template-columns: repeat(7, 1fr);
-      gap: 2px;
-    }
-    .dow {
-      text-align: center;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--muted);
-      padding: 8px 4px;
-    }
-    .cell {
-      min-height: 80px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 4px;
-      position: relative;
-    }
-    .date {
-      display: block;
-      font-size: 13px;
-      font-weight: 500;
-      margin-bottom: 2px;
-    }
-    .seg {
-      background: var(--pending);
-      color: white;
-      padding: 4px 6px;
-      border-radius: 4px;
-      font-size: 11px;
-      margin-bottom: 2px;
-      cursor: pointer;
-      transition: opacity 0.2s;
-    }
-    .seg:hover { opacity: 0.8; }
-    .seg.confirm { background: var(--confirm); }
-    .overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.5);
-      backdrop-filter: blur(4px);
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-      padding: 20px;
-    }
-    .modal {
-      background: var(--card);
-      border-radius: var(--radius);
-      max-width: 800px;
-      width: 100%;
-      max-height: 90vh;
-      overflow-y: auto;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-    }
-    .modal-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 20px 24px;
-      border-bottom: 1px solid var(--border);
-    }
-    .modal-title { font-size: 20px; font-weight: 700; }
-    .modal-body { padding: 24px; }
-    .row {
-      display: grid;
-      grid-template-columns: 140px 1fr;
-      gap: 12px;
-      margin-bottom: 16px;
-      align-items: start;
-    }
-    .row label {
-      font-size: 13px;
-      color: var(--muted);
-      font-weight: 500;
-      padding-top: 10px;
-    }
+    /* Additional styles for editable fields */
     .row input, .row textarea {
       width: 100%;
-      padding: 10px 12px;
-      border: 1px solid var(--border);
+      padding: 8px 10px;
+      border: 1px solid #e5e7eb;
       border-radius: 8px;
       font-size: 14px;
       font-family: inherit;
+      background: #fff;
       transition: border-color 0.2s;
-      background: var(--card);
     }
     .row input:focus, .row textarea:focus {
       outline: none;
-      border-color: var(--primary);
+      border-color: var(--accent);
     }
     .row textarea {
       resize: vertical;
       min-height: 60px;
     }
-    .row .value {
-      padding: 10px 0;
-      font-size: 14px;
-    }
-    .status-tag {
-      display: inline-block;
-      padding: 4px 12px;
-      border-radius: 12px;
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: uppercase;
-    }
-    .status-tag.pending {
-      background: rgba(255, 149, 0, 0.1);
-      color: var(--pending);
-    }
-    .status-tag.confirm {
-      background: rgba(52, 199, 89, 0.1);
-      color: var(--confirm);
-    }
-    .calculated {
-      background: rgba(0, 113, 227, 0.05);
+    .row.editable {
+      background: #fff;
       padding: 10px 12px;
-      border-radius: 8px;
-      font-weight: 600;
-      color: var(--primary);
-      font-size: 14px;
     }
-    .warning {
-      background: rgba(255, 149, 0, 0.1);
-      padding: 10px 12px;
-      border-radius: 8px;
-      font-weight: 600;
-      color: var(--pending);
-      font-size: 14px;
-    }
-    .modal-actions {
-      padding: 20px 24px;
-      border-top: 1px solid var(--border);
-      display: flex;
-      gap: 12px;
+    .row.editable label {
+      margin-bottom: 6px;
     }
     .date-range {
       display: flex;
@@ -253,29 +44,46 @@
       color: var(--muted);
       font-size: 14px;
     }
-    .number-row {
+    .number-fields {
       display: flex;
       gap: 12px;
     }
-    .number-row > div {
+    .number-field {
       flex: 1;
     }
-    .number-row label {
+    .number-field label {
       display: block;
-      font-size: 13px;
-      color: var(--muted);
-      font-weight: 500;
+      color: #64748b;
+      font-size: 12px;
       margin-bottom: 6px;
     }
-    .number-row input {
+    .number-field input {
       width: 100%;
-      padding: 10px 12px;
-      border: 1px solid var(--border);
+      padding: 8px 10px;
+      border: 1px solid #e5e7eb;
       border-radius: 8px;
       font-size: 14px;
       font-family: inherit;
-      transition: border-color 0.2s;
-      background: var(--card);
+      background: #fff;
+    }
+    .calculated-value {
+      background: rgba(10, 132, 255, 0.08);
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-weight: 700;
+      color: var(--accent);
+      font-size: 14px;
+    }
+    .warning-value {
+      background: rgba(234, 88, 12, 0.08);
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-weight: 700;
+      color: var(--pending);
+      font-size: 14px;
+    }
+    .row.full-width {
+      grid-column: 1 / span 2;
     }
   </style>
 </head>
@@ -308,7 +116,7 @@
           <span class="dot pending"></span> Ausstehend
           <span class="dot confirm" style="margin-left:12px"></span> Bestätigt
         </div>
-        <div class="cal-controls">
+        <div style="margin-left:auto;display:flex;gap:8px">
           <button class="btn secondary" id="prevBtn">‹</button>
           <button class="btn secondary" id="todayBtn">Heute</button>
           <button class="btn secondary" id="nextBtn">›</button>
@@ -333,15 +141,15 @@
         <button class="btn ghost" id="mClose">✕</button>
       </div>
       <div class="modal-body">
-        <div class="row">
+        <div class="row editable">
           <label>Gast</label>
           <input type="text" id="mGuest" />
         </div>
         <div class="row">
           <label>Status</label>
-          <div id="mStatus" class="value"></div>
+          <div id="mStatus"></div>
         </div>
-        <div class="row">
+        <div class="row editable full-width">
           <label>Zeitraum</label>
           <div class="date-range">
             <input type="date" id="mStart" />
@@ -349,56 +157,56 @@
             <input type="date" id="mEnd" />
           </div>
         </div>
-        <div class="row">
+        <div class="row editable">
           <label>E-Mail</label>
           <input type="email" id="mEmail" />
         </div>
-        <div class="row">
+        <div class="row editable">
           <label>Telefon</label>
           <input type="text" id="mPhone" />
         </div>
-        <div class="row">
+        <div class="row editable full-width">
           <label>Adresse</label>
           <textarea id="mAddress"></textarea>
         </div>
-        <div class="row">
+        <div class="row editable full-width">
           <label>Gäste</label>
-          <div class="number-row">
-            <div>
+          <div class="number-fields">
+            <div class="number-field">
               <label>Erwachsene</label>
               <input type="number" id="mAdults" min="0" />
             </div>
-            <div>
+            <div class="number-field">
               <label>Kinder</label>
               <input type="number" id="mChildren" min="0" />
             </div>
           </div>
         </div>
-        <div class="row">
+        <div class="row editable">
           <label>Gesamtbetrag</label>
           <input type="text" id="mAmount" placeholder="0.00" />
         </div>
-        <div class="row">
+        <div class="row editable">
           <label>Anzahlung</label>
           <input type="text" id="mDeposit" placeholder="0.00" />
         </div>
-        <div class="row">
+        <div class="row editable">
           <label>Anzahlung fällig</label>
           <input type="date" id="mDepositDue" />
         </div>
         <div class="row">
           <label>Aufenthaltsabgabe</label>
-          <div class="calculated" id="mTouristTax">€0.00</div>
+          <div class="calculated-value" id="mTouristTax">€0.00</div>
         </div>
         <div class="row">
           <label>Gesamtpreis inkl.</label>
-          <div class="calculated" id="mTotalWithTax">€0.00</div>
+          <div class="calculated-value" id="mTotalWithTax">€0.00</div>
         </div>
         <div class="row">
           <label>Stornokosten</label>
-          <div class="warning" id="mCancellationFee">Kostenlos stornierbar</div>
+          <div class="warning-value" id="mCancellationFee">Kostenlos stornierbar</div>
         </div>
-        <div class="row">
+        <div class="row editable full-width">
           <label>Notizen</label>
           <textarea id="mNotes"></textarea>
         </div>
@@ -554,14 +362,6 @@ function buildMonth(date) {
   const daysInMonth = new Date(y, m + 1, 0).getDate();
 
   calTitle.textContent = first.toLocaleDateString('de-AT', { month: 'long', year: 'numeric' });
-
-  const dows = ['Mo','Di','Mi','Do','Fr','Sa','So'];
-  dows.forEach(txt => {
-    const el = document.createElement('div');
-    el.className = 'dow';
-    el.textContent = txt;
-    calGrid.appendChild(el);
-  });
 
   for (let i = 0; i < startOffset; i++) {
     const empty = document.createElement('div');
