@@ -1,5 +1,6 @@
 // ---- Cloudflare API Integration ----
 let bookings = [];
+let currentBooking = null;
 
 async function loadBookings() {
   try {
@@ -12,19 +13,21 @@ async function loadBookings() {
   }
 }
 
-async function addBooking(newBooking) {
+async function saveBooking(booking) {
   try {
     const res = await fetch('/api/bookings', {
-      method: 'POST',
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newBooking)
+      body: JSON.stringify(booking)
     });
     const result = await res.json();
-    console.log('✅ Booking added:', result);
+    console.log('✅ Booking saved:', result);
     await loadBookings();
     buildMonth(view);
+    return true;
   } catch (err) {
-    console.error('❌ Error adding booking:', err);
+    console.error('❌ Error saving booking:', err);
+    return false;
   }
 }
 
@@ -32,8 +35,101 @@ async function addBooking(newBooking) {
 function pad(n) { return n < 10 ? ('0' + n) : '' + n; }
 function iso(d) { return d.toISOString().slice(0, 10); }
 function formatDateEU(dateStr) {
+  if (!dateStr) return '';
   const [y, m, d] = dateStr.split('-');
   return `${d}.${m}.${y}`;
+}
+function parseEUDate(euStr) {
+  if (!euStr) return null;
+  const [d, m, y] = euStr.split('.');
+  return new Date(y, m - 1, d);
+}
+
+// ---- Calculate nights between two dates ----
+function calculateNights(startISO, endISO) {
+  if (!startISO || !endISO) return 0;
+  const start = new Date(startISO);
+  const end = new Date(endISO);
+  const diff = end - start;
+  return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
+}
+
+// ---- Calculate tourist tax (€5 per adult per night) ----
+function calculateTouristTax(nights, adults) {
+  return nights * adults * 5;
+}
+
+// ---- Calculate cancellation fee based on current date ----
+function calculateCancellationFee(booking) {
+  if (!booking.amount || !booking.cancellationPolicy) {
+    return { fee: 0, percentage: 0, text: 'Keine Stornobedingungen' };
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  let policy;
+  try {
+    policy = JSON.parse(booking.cancellationPolicy);
+  } catch (e) {
+    return { fee: 0, percentage: 0, text: 'Fehler beim Parsen' };
+  }
+
+  if (booking.freeCancellation === 'true') {
+    // Check if we're still in free cancellation period
+    if (policy.length > 0) {
+      const firstPolicyDate = parseEUDate(policy[0].date);
+      if (today < firstPolicyDate) {
+        return { fee: 0, percentage: 0, text: 'Kostenlos stornierbar' };
+      }
+    }
+  }
+
+  // Find applicable cancellation percentage
+  let applicablePercentage = 0;
+  for (const p of policy) {
+    const policyDate = parseEUDate(p.date);
+    if (today >= policyDate) {
+      applicablePercentage = parseFloat(p.percentage);
+    }
+  }
+
+  const amount = parseFloat(booking.amount) || 0;
+  const fee = (amount * applicablePercentage) / 100;
+
+  return {
+    fee: fee.toFixed(2),
+    percentage: applicablePercentage,
+    text: applicablePercentage > 0 ? `${applicablePercentage}% = €${fee.toFixed(2)}` : 'Kostenlos stornierbar'
+  };
+}
+
+// ---- Update calculations in modal ----
+function updateCalculations() {
+  const start = document.getElementById('mStart').value;
+  const end = document.getElementById('mEnd').value;
+  const adults = parseInt(document.getElementById('mAdults').value) || 0;
+  const amount = parseFloat(document.getElementById('mAmount').value) || 0;
+
+  // Calculate nights
+  const nights = calculateNights(start, end);
+
+  // Calculate tourist tax
+  const touristTax = calculateTouristTax(nights, adults);
+  document.getElementById('mTouristTax').textContent = `€${touristTax.toFixed(2)} (${nights} Nächte × ${adults} Erwachsene × €5)`;
+
+  // Calculate total with tax
+  const totalWithTax = amount + touristTax;
+  document.getElementById('mTotalWithTax').textContent = `€${totalWithTax.toFixed(2)}`;
+
+  // Calculate cancellation fee
+  if (currentBooking) {
+    const cancellation = calculateCancellationFee({
+      ...currentBooking,
+      amount: amount.toString()
+    });
+    document.getElementById('mCancellationFee').textContent = cancellation.text;
+  }
 }
 
 // ---- Calendar ----
@@ -48,7 +144,7 @@ function buildMonth(date) {
   const y = date.getFullYear();
   const m = date.getMonth();
   const first = new Date(y, m, 1);
-  const startOffset = (first.getDay() + 6) % 7; // Monday start
+  const startOffset = (first.getDay() + 6) % 7;
   const daysInMonth = new Date(y, m + 1, 0).getDate();
 
   calTitle.textContent = first.toLocaleDateString('de-AT', { month: 'long', year: 'numeric' });
@@ -112,49 +208,86 @@ function buildMonth(date) {
 
 // ---- Modal ----
 function openModal(b) {
+  currentBooking = b;
   const overlay = document.getElementById('overlay');
   overlay.style.display = 'flex';
+  
   document.getElementById('mTitle').textContent = b.guest;
-  document.getElementById('mGuest').textContent = b.guest;
+  document.getElementById('mGuest').value = b.guest;
   document.getElementById('mStatus').innerHTML = `<span class='status-tag ${b.status}'>${(b.status === 'confirm') ? 'Bestätigt' : 'Ausstehend'}</span>`;
-  document.getElementById('mDates').textContent = `${formatDateEU(b.start)} bis ${formatDateEU(b.end)}`;
-  document.getElementById('mEmail').textContent = b.email;
-  document.getElementById('mPhone').textContent = b.phone || 'Nicht angegeben';
-  document.getElementById('mAddress').textContent = b.address || 'Nicht angegeben';
-  document.getElementById('mAmount').textContent = b.amount ? `€${b.amount}` : 'Nicht angegeben';
-  document.getElementById('mDeposit').textContent = b.depositAmount ? `€${b.depositAmount}` : 'Nicht angegeben';
-  document.getElementById('mDepositDue').textContent = b.depositDue ? formatDateEU(b.depositDue) : 'Nicht angegeben';
-  document.getElementById('mGuests').textContent = b.guests;
-  document.getElementById('mNotes').textContent = b.notes || 'Keine Notizen';
+  document.getElementById('mStart').value = b.start;
+  document.getElementById('mEnd').value = b.end;
+  document.getElementById('mEmail').value = b.email;
+  document.getElementById('mPhone').value = b.phone || '';
+  document.getElementById('mAddress').value = b.address || '';
+  document.getElementById('mAdults').value = b.adults || 2;
+  document.getElementById('mChildren').value = b.children || 0;
+  document.getElementById('mAmount').value = b.amount || '';
+  document.getElementById('mDeposit').value = b.depositAmount || '';
+  document.getElementById('mDepositDue').value = b.depositDue || '';
+  document.getElementById('mNotes').value = b.notes || '';
 
-  const emailsEl = document.getElementById('mEmails');
-  emailsEl.innerHTML = '';
-  (b.emails || []).forEach(e => {
-    const it = document.createElement('div');
-    it.className = 'em-item';
-    it.innerHTML = `<div class='em-meta'>${e.time} — ${e.from}</div><div class='em-body'>${e.subject}: ${e.body}</div>`;
-    emailsEl.appendChild(it);
-  });
+  updateCalculations();
+}
+
+function closeModal() {
+  document.getElementById('overlay').style.display = 'none';
+  currentBooking = null;
 }
 
 // ---- Navigation ----
-document.getElementById('mClose').addEventListener('click', () => {
-  document.getElementById('overlay').style.display = 'none';
-});
+document.getElementById('mClose').addEventListener('click', closeModal);
 document.getElementById('overlay').addEventListener('click', e => {
-  if (e.target.id === 'overlay') e.currentTarget.style.display = 'none';
+  if (e.target.id === 'overlay') closeModal();
 });
+
 document.getElementById('prevBtn').addEventListener('click', () => {
   view.setMonth(view.getMonth() - 1);
   buildMonth(view);
 });
+
 document.getElementById('nextBtn').addEventListener('click', () => {
   view.setMonth(view.getMonth() + 1);
   buildMonth(view);
 });
+
 document.getElementById('todayBtn').addEventListener('click', () => {
   view = new Date();
   buildMonth(view);
+});
+
+// ---- Save Button ----
+document.getElementById('saveBtn').addEventListener('click', async () => {
+  if (!currentBooking) return;
+
+  const updated = {
+    ...currentBooking,
+    guest: document.getElementById('mGuest').value,
+    email: document.getElementById('mEmail').value,
+    phone: document.getElementById('mPhone').value,
+    address: document.getElementById('mAddress').value,
+    start: document.getElementById('mStart').value,
+    end: document.getElementById('mEnd').value,
+    adults: parseInt(document.getElementById('mAdults').value) || 2,
+    children: parseInt(document.getElementById('mChildren').value) || 0,
+    amount: document.getElementById('mAmount').value,
+    depositAmount: document.getElementById('mDeposit').value,
+    depositDue: document.getElementById('mDepositDue').value,
+    notes: document.getElementById('mNotes').value
+  };
+
+  const success = await saveBooking(updated);
+  if (success) {
+    alert('✅ Buchung gespeichert!');
+    closeModal();
+  } else {
+    alert('❌ Fehler beim Speichern');
+  }
+});
+
+// ---- Auto-recalculate on input change ----
+['mStart', 'mEnd', 'mAdults', 'mAmount'].forEach(id => {
+  document.getElementById(id).addEventListener('input', updateCalculations);
 });
 
 // ---- Startup ----
