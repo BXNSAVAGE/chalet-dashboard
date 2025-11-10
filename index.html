@@ -253,6 +253,25 @@ async function saveBooking(booking) {
   }
 }
 
+// ---- Clean address function ----
+function cleanAddress(address) {
+  if (!address) return '';
+  
+  // Remove email addresses
+  let cleaned = address.replace(/E-Mail:\s*[\w.-]+@[\w.-]+\.\w+/gi, '');
+  
+  // Remove telefax
+  cleaned = cleaned.replace(/Telefax:\s*/gi, '');
+  
+  // Remove extra whitespace and clean up
+  cleaned = cleaned
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0)
+    .join('\n');
+  
+  return cleaned;
+}
 // ---- Helpers ----
 function pad(n) { return n < 10 ? ('0' + n) : '' + n; }
 function iso(d) { return d.toISOString().slice(0, 10); }
@@ -427,7 +446,7 @@ function openModal(b) {
   document.getElementById('mEnd').value = b.end;
   document.getElementById('mEmail').value = b.email;
   document.getElementById('mPhone').value = b.phone || '';
-  document.getElementById('mAddress').value = b.address || '';
+  document.getElementById('mAddress').value = cleanAddress(b.address) || '';
   document.getElementById('mAdults').value = b.adults || 2;
   document.getElementById('mChildren').value = b.children || 0;
   document.getElementById('mAmount').value = b.amount || '';
