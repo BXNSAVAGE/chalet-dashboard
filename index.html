@@ -707,9 +707,13 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
     return;
   }
 
-  if (!isNewBooking && currentBooking) {
+  // Keep the ID if editing existing booking
+  if (!isNewBooking && currentBooking && currentBooking.id) {
     bookingData.id = currentBooking.id;
   }
+
+  console.log('Saving booking:', bookingData);
+  console.log('Is new booking:', isNewBooking);
 
   const success = await saveBooking(bookingData);
   if (success) {
