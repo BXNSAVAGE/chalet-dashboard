@@ -102,7 +102,7 @@
         <h3>Heute</h3>
         <div class="stat" style="margin-top:8px" id="nextAppointment">
           <div>
-            <div style="font-weight:800">Nächster Termin</div>
+            
             <div style="color:var(--muted);font-size:14px">Wird geladen...</div>
           </div>
           <span class="tag confirm">—</span>
@@ -118,7 +118,7 @@
         </div>
         <div style="display:flex;gap:8px">
           <button class="btn secondary" id="prevBtn">‹</button>
-          <button class="btn secondary" id="todayBtn">Heute</button>
+          <button class="btn secondary" id="todayBtn">Nächster Termin</button>
           <button class="btn secondary" id="nextBtn">›</button>
         </div>
       </div>
@@ -491,7 +491,7 @@ function updateNextAppointment() {
     
     widget.innerHTML = `
       <div>
-        <div style="font-weight:800">Nächster Termin</div>
+        
         <div style="color:var(--muted);font-size:14px">${next.guest} — ${isToday ? 'Heute' : formatDateEU(next.start)} Anreise</div>
       </div>
       <span class="tag ${next.status}">${next.status === 'confirm' ? 'BESTÄTIGT' : 'AUSSTEHEND'}</span>
@@ -499,7 +499,7 @@ function updateNextAppointment() {
   } else {
     widget.innerHTML = `
       <div>
-        <div style="font-weight:800">Nächster Termin</div>
+        
         <div style="color:var(--muted);font-size:14px">Keine bevorstehenden Buchungen</div>
       </div>
       <span class="tag confirm">—</span>
