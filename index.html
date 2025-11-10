@@ -99,10 +99,10 @@
   <main class="grid">
     <aside>
       <div class="card">
-        <h3>Nächster Termin</h3>
+        <h3>Heute</h3>
         <div class="stat" style="margin-top:8px" id="nextAppointment">
           <div>
-          
+            <div style="font-weight:800">Nächster Termin</div>
             <div style="color:var(--muted);font-size:14px">Wird geladen...</div>
           </div>
           <span class="tag confirm">—</span>
@@ -404,9 +404,10 @@ function buildMonth(date) {
       if (!cell) return;
       const seg = document.createElement('div');
       seg.className = 'seg ' + (b.status === 'confirm' ? 'confirm' : 'pending');
-      seg.innerHTML = (idx === 0)
-        ? `${b.guest} — ${(b.status === 'confirm') ? 'Bestätigt' : 'Ausstehend'}`
-        : '';
+      
+      // Show guest name on every day they're staying
+      seg.innerHTML = `${b.guest}`;
+      
       seg.addEventListener('click', () => openModal(b));
       cell.appendChild(seg);
     });
@@ -442,6 +443,8 @@ function updateNextAppointment() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   
+  console.log('Updating next appointment, bookings:', bookings);
+  
   // Find next upcoming booking
   const upcoming = bookings
     .filter(b => {
@@ -451,16 +454,25 @@ function updateNextAppointment() {
     })
     .sort((a, b) => new Date(a.start) - new Date(b.start));
   
+  console.log('Upcoming bookings:', upcoming);
+  
   const widget = document.getElementById('nextAppointment');
+  
+  if (!widget) {
+    console.error('Next appointment widget not found!');
+    return;
+  }
   
   if (upcoming.length > 0) {
     const next = upcoming[0];
     const startDate = new Date(next.start);
     const isToday = startDate.getTime() === today.getTime();
     
+    console.log('Next booking:', next);
+    
     widget.innerHTML = `
       <div>
-        
+        <div style="font-weight:800">Nächster Termin</div>
         <div style="color:var(--muted);font-size:14px">${next.guest} — ${isToday ? 'Heute' : formatDateEU(next.start)} Anreise</div>
       </div>
       <span class="tag ${next.status}">${next.status === 'confirm' ? 'BESTÄTIGT' : 'AUSSTEHEND'}</span>
@@ -468,7 +480,7 @@ function updateNextAppointment() {
   } else {
     widget.innerHTML = `
       <div>
-        
+        <div style="font-weight:800">Nächster Termin</div>
         <div style="color:var(--muted);font-size:14px">Keine bevorstehenden Buchungen</div>
       </div>
       <span class="tag confirm">—</span>
