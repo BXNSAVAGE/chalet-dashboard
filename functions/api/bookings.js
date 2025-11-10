@@ -1,6 +1,5 @@
 export async function onRequest(context) {
   const { request, env } = context;
-  const url = new URL(request.url);
   const db = env.DB;
   
   // --- GET: Fetch all bookings ---
@@ -24,8 +23,11 @@ export async function onRequest(context) {
       
       await db
         .prepare(
-          `INSERT INTO bookings (id, guest, email, phone, address, status, start, end, guests, amount, depositAmount, depositDue, notes)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO bookings (
+            id, guest, email, phone, address, status, start, end, 
+            adults, children, amount, depositAmount, depositDue, 
+            cancellationPolicy, freeCancellation, notes
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .bind(
           body.id,
@@ -36,10 +38,13 @@ export async function onRequest(context) {
           body.status || 'pending',
           body.start || '',
           body.end || '',
-          body.guests || 1,
+          body.adults || 2,
+          body.children || 0,
           body.amount || '',
           body.depositAmount || '',
           body.depositDue || '',
+          body.cancellationPolicy || '[]',
+          body.freeCancellation || 'false',
           body.notes || ''
         )
         .run();
@@ -50,7 +55,53 @@ export async function onRequest(context) {
       );
     } catch (err) {
       console.error('❌ DB insert failed', err);
-      return new Response(JSON.stringify({ error: 'Insert failed' }), { status: 500 });
+      return new Response(JSON.stringify({ error: 'Insert failed', details: err.message }), { status: 500 });
+    }
+  }
+  
+  // --- PUT: Update a booking ---
+  if (request.method === 'PUT') {
+    try {
+      const body = await request.json();
+      if (!body.id) {
+        return new Response(JSON.stringify({ error: 'Missing booking ID' }), { status: 400 });
+      }
+      
+      await db
+        .prepare(
+          `UPDATE bookings SET 
+            guest=?, email=?, phone=?, address=?, status=?, start=?, end=?,
+            adults=?, children=?, amount=?, depositAmount=?, depositDue=?,
+            cancellationPolicy=?, freeCancellation=?, notes=?
+          WHERE id=?`
+        )
+        .bind(
+          body.guest || '',
+          body.email || '',
+          body.phone || '',
+          body.address || '',
+          body.status || 'pending',
+          body.start || '',
+          body.end || '',
+          body.adults || 2,
+          body.children || 0,
+          body.amount || '',
+          body.depositAmount || '',
+          body.depositDue || '',
+          body.cancellationPolicy || '[]',
+          body.freeCancellation || 'false',
+          body.notes || '',
+          body.id
+        )
+        .run();
+        
+      return new Response(
+        JSON.stringify({ ok: true, id: body.id }),
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+    } catch (err) {
+      console.error('❌ DB update failed', err);
+      return new Response(JSON.stringify({ error: 'Update failed', details: err.message }), { status: 500 });
     }
   }
   
