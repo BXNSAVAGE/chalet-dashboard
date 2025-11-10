@@ -100,12 +100,12 @@
     <aside>
       <div class="card">
         <h3>Heute</h3>
-        <div class="stat" style="margin-top:8px">
+        <div class="stat" style="margin-top:8px" id="nextAppointment">
           <div>
             <div style="font-weight:800">Nächster Termin</div>
-            <div style="color:var(--muted);font-size:14px">Novak — Anreise 15:00</div>
+            <div style="color:var(--muted);font-size:14px">Wird geladen...</div>
           </div>
-          <span class="tag confirm">BESTÄTIGT</span>
+          <span class="tag confirm">—</span>
         </div>
       </div>
     </aside>
@@ -228,6 +228,7 @@ async function loadBookings() {
     const res = await fetch('/api/bookings');
     if (!res.ok) throw new Error('Failed to fetch bookings');
     bookings = await res.json();
+    console.log('Loaded bookings:', bookings);
   } catch (e) {
     console.error('❌ Could not load bookings:', e);
     bookings = [];
@@ -436,6 +437,45 @@ function openModal(b) {
   updateCalculations();
 }
 
+// ---- Update next appointment widget ----
+function updateNextAppointment() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  // Find next upcoming booking
+  const upcoming = bookings
+    .filter(b => {
+      const start = new Date(b.start);
+      start.setHours(0, 0, 0, 0);
+      return start >= today;
+    })
+    .sort((a, b) => new Date(a.start) - new Date(b.start));
+  
+  const widget = document.getElementById('nextAppointment');
+  
+  if (upcoming.length > 0) {
+    const next = upcoming[0];
+    const startDate = new Date(next.start);
+    const isToday = startDate.getTime() === today.getTime();
+    
+    widget.innerHTML = `
+      <div>
+        <div style="font-weight:800">Nächster Termin</div>
+        <div style="color:var(--muted);font-size:14px">${next.guest} — ${isToday ? 'Heute' : formatDateEU(next.start)} Anreise</div>
+      </div>
+      <span class="tag ${next.status}">${next.status === 'confirm' ? 'BESTÄTIGT' : 'AUSSTEHEND'}</span>
+    `;
+  } else {
+    widget.innerHTML = `
+      <div>
+        <div style="font-weight:800">Nächster Termin</div>
+        <div style="color:var(--muted);font-size:14px">Keine bevorstehenden Buchungen</div>
+      </div>
+      <span class="tag confirm">—</span>
+    `;
+  }
+}
+
 function closeModal() {
   document.getElementById('overlay').style.display = 'none';
   currentBooking = null;
@@ -485,6 +525,7 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
   const success = await saveBooking(updated);
   if (success) {
     alert('✅ Buchung gespeichert!');
+    updateNextAppointment();
     closeModal();
   } else {
     alert('❌ Fehler beim Speichern');
@@ -497,7 +538,10 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
 });
 
 // ---- Startup ----
-loadBookings().then(() => buildMonth(view));
+loadBookings().then(() => {
+  buildMonth(view);
+  updateNextAppointment();
+});
   </script>
 </body>
 </html>
