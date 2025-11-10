@@ -4,10 +4,115 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Chalet Dashboard — Apple-Style MVP (DE)</title>
-  <link rel="stylesheet" href="style.css" />
   <style>
-    /* Additional styles for editable fields */
-    .row input, .row textarea {
+    :root {
+      --bg:#f7f7f9; --glass:#ffffffcc; --text:#0b0c0f; --muted:#6b7280;
+      --accent:#0a84ff; --good:#16a34a; --pending:#ea580c; --bad:#ef4444;
+      --radius:16px; --pad:14px; --shadow:0 8px 24px rgba(0,0,0,.06);
+    }
+
+    * { box-sizing:border-box; margin:0; padding:0; }
+    html, body { height:100%; font:16px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text","SF Pro Display",Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; background:linear-gradient(180deg,#f9fafb 0%,#eef1f6 100%); color:var(--text); }
+
+    header {
+      position:sticky; top:0; z-index:10;
+      display:flex; align-items:center; gap:16px; padding:12px 16px;
+      backdrop-filter:saturate(180%) blur(18px); background:#ffffffb3; border-bottom:1px solid #eceef2;
+    }
+    .brand { font-weight:700; }
+    .pill { padding:8px 12px; border-radius:999px; background:#eef2ff; color:#334155; font-weight:600; }
+
+    main.grid {
+      display:grid; gap:16px; padding:16px; max-width:1500px; margin:0 auto;
+      grid-template-columns:280px 1fr 360px;
+    }
+    @media(max-width:1200px){ main.grid { grid-template-columns:1fr; } }
+
+    .card {
+      background:var(--glass); border-radius:var(--radius); box-shadow:var(--shadow);
+      padding:var(--pad); backdrop-filter:saturate(160%) blur(14px);
+    }
+    .card h3 { margin:0 0 10px; font-size:18px; }
+
+    .btn {
+      display:inline-flex; align-items:center; gap:8px; padding:10px 14px;
+      border:0; border-radius:12px; background:linear-gradient(#0a84ff,#0066d6);
+      color:#fff; font-weight:600; box-shadow:var(--shadow); cursor:pointer;
+    }
+    .btn.secondary { background:#eef1f6; color:#0b0c0f; }
+    .btn.ghost { background:transparent; border:1px solid #e5e7eb; color:#0b0c0f; }
+    .btn.danger { background:linear-gradient(#ef4444,#dc2626); color:#fff; }
+
+    .stat {
+      display:flex; align-items:center; justify-content:space-between; padding:12px;
+      background:#fff; border-radius:12px; border:1px solid #eef0f4;
+    }
+    .tag {
+      padding:6px 10px; border-radius:999px; font-weight:700; font-size:12px;
+    }
+    .tag.pending { background:#ffedd5; color:var(--pending); }
+    .tag.confirm { background:#dcfce7; color:var(--good); }
+
+    .calendar { padding:0; overflow:hidden; }
+    .cal-head { display:flex; align-items:center; justify-content:space-between; padding:12px 12px 8px; }
+    .cal-title { font-weight:700; font-size:18px; }
+    .legend { display:flex; gap:10px; align-items:center; color:var(--muted); font-size:12px; }
+    .dot { width:10px; height:10px; border-radius:50%; display:inline-block; }
+    .dot.pending { background:var(--pending); }
+    .dot.confirm { background:var(--good); }
+
+    .cal-grid {
+      display:grid; grid-template-columns:repeat(7,1fr); gap:10px; padding:12px;
+      background:transparent; border-top:1px solid #eceef2;
+    }
+    .cell {
+      aspect-ratio:1/1; background:#fff; border:1px solid #eef0f4;
+      border-radius:12px; position:relative; overflow:hidden;
+    }
+    .date { position:absolute; top:8px; right:10px; color:#94a3b8; font-size:12px; z-index:3; pointer-events:none; }
+    .seg {
+      position:absolute; inset:8px; border-radius:12px; color:#fff;
+      font-weight:800; font-size:13px; display:flex; align-items:center; justify-content:center;
+      text-align:center; cursor:pointer; z-index:1;
+    }
+    .seg.pending { background:var(--pending); }
+    .seg.confirm { background:var(--good); }
+
+    .timeline { position:relative; padding-left:18px; }
+    .timeline:before {
+      content:""; position:absolute; left:7px; top:8px; bottom:8px; width:2px; background:#e5e7eb;
+    }
+    .tl-item { position:relative; margin:0 0 14px 0; }
+    .tl-item:before {
+      content:""; position:absolute; left:-11px; top:6px; width:10px; height:10px;
+      background:#fff; border:2px solid #94a3b8; border-radius:50%;
+    }
+    .tl-time { color:#64748b; font-size:12px; margin-bottom:4px; }
+    .tl-card { background:#fff; border:1px solid #eef0f4; border-radius:12px; padding:10px 12px; }
+
+    .overlay {
+      position:fixed; inset:0; background:rgba(0,0,0,.25);
+      display:none; align-items:center; justify-content:center; padding:16px; z-index:100;
+    }
+    .modal {
+      width:min(780px,96vw); background:#fff; border-radius:20px;
+      box-shadow:0 24px 60px rgba(0,0,0,.18); overflow:hidden;
+    }
+    .modal-head {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:16px 18px; border-bottom:1px solid #eef0f4;
+    }
+    .modal-body {
+      padding:16px 18px; display:grid; grid-template-columns:1fr 1fr; gap:12px;
+      max-height: 70vh; overflow-y: auto;
+    }
+    .row {
+      background:#f8fafc; border:1px solid #eef0f4; border-radius:12px;
+      padding:10px 12px;
+    }
+    .row label { display:block; color:#64748b; font-size:12px; margin-bottom:6px; }
+    
+    .row input, .row textarea, .row select {
       width: 100%;
       padding: 8px 10px;
       border: 1px solid #e5e7eb;
@@ -17,7 +122,7 @@
       background: #fff;
       transition: border-color 0.2s;
     }
-    .row input:focus, .row textarea:focus {
+    .row input:focus, .row textarea:focus, .row select:focus {
       outline: none;
       border-color: var(--accent);
     }
@@ -28,9 +133,6 @@
     .row.editable {
       background: #fff;
       padding: 10px 12px;
-    }
-    .row.editable label {
-      margin-bottom: 6px;
     }
     .date-range {
       display: flex;
@@ -85,6 +187,26 @@
     .row.full-width {
       grid-column: 1 / span 2;
     }
+
+    .modal-actions {
+      display:flex; gap:10px; padding:16px 18px;
+      border-top:1px solid #eef0f4; justify-content:space-between;
+    }
+    .modal-actions-left {
+      display: flex;
+      gap: 10px;
+    }
+    .modal-actions-right {
+      display: flex;
+      gap: 10px;
+      margin-left: auto;
+    }
+    .status-tag {
+      display:inline-block; padding:4px 10px; border-radius:999px;
+      font-size:12px; font-weight:700;
+    }
+    .status-tag.confirm { background:#dcfce7; color:var(--good); }
+    .status-tag.pending { background:#ffedd5; color:var(--pending); }
   </style>
 </head>
 <body>
@@ -102,7 +224,6 @@
         <h3>Nächster Termin</h3>
         <div class="stat" style="margin-top:8px" id="nextAppointment">
           <div>
-            
             <div style="color:var(--muted);font-size:14px">Wird geladen...</div>
           </div>
           <span class="tag confirm">—</span>
@@ -140,14 +261,17 @@
         <div class="modal-title" id="mTitle">Buchung</div>
         <button class="btn ghost" id="mClose">✕</button>
       </div>
-      <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+      <div class="modal-body">
         <div class="row editable">
           <label>Gast</label>
           <input type="text" id="mGuest" />
         </div>
-        <div class="row">
+        <div class="row editable">
           <label>Status</label>
-          <div id="mStatus"></div>
+          <select id="mStatus">
+            <option value="pending">Ausstehend</option>
+            <option value="confirm">Bestätigt</option>
+          </select>
         </div>
         <div class="row editable full-width">
           <label>Zeitraum</label>
@@ -174,11 +298,11 @@
           <div class="number-fields">
             <div class="number-field">
               <label>Erwachsene</label>
-              <input type="number" id="mAdults" min="0" />
+              <input type="number" id="mAdults" min="0" value="2" />
             </div>
             <div class="number-field">
               <label>Kinder</label>
-              <input type="number" id="mChildren" min="0" />
+              <input type="number" id="mChildren" min="0" value="0" />
             </div>
           </div>
         </div>
@@ -212,16 +336,22 @@
         </div>
       </div>
       <div class="modal-actions">
-        <button class="btn" id="saveBtn">Speichern</button>
-        <button class="btn secondary" id="reminderBtn">Erinnerung senden</button>
-        <button class="btn ghost" id="tvbBtn">Bei TVB öffnen</button>
+        <div class="modal-actions-left">
+          <button class="btn danger" id="deleteBtn" style="display:none;">Löschen</button>
+        </div>
+        <div class="modal-actions-right">
+          <button class="btn" id="saveBtn">Speichern</button>
+          <button class="btn secondary" id="reminderBtn">Erinnerung senden</button>
+          <button class="btn ghost" id="tvbBtn">Bei TVB öffnen</button>
+        </div>
       </div>
     </div>
   </div>
   <script>
-// ---- Cloudflare API Integration ----
+// ---- Data Storage ----
 let bookings = [];
 let currentBooking = null;
+let isNewBooking = false;
 
 async function loadBookings() {
   try {
@@ -231,7 +361,41 @@ async function loadBookings() {
     console.log('Loaded bookings:', bookings);
   } catch (e) {
     console.error('❌ Could not load bookings:', e);
-    bookings = [];
+    // Demo data for testing
+    bookings = [
+      {
+        id: '1',
+        guest: 'Familie Müller',
+        status: 'confirm',
+        start: '2025-11-15',
+        end: '2025-11-20',
+        email: 'mueller@example.com',
+        phone: '+43 123 456789',
+        address: 'Musterstraße 1\n1010 Wien',
+        adults: 2,
+        children: 1,
+        amount: '800',
+        depositAmount: '200',
+        depositDue: '2025-11-01',
+        notes: 'Frühanreise gewünscht'
+      },
+      {
+        id: '2',
+        guest: 'Herr Schmidt',
+        status: 'pending',
+        start: '2025-11-25',
+        end: '2025-11-28',
+        email: 'schmidt@example.com',
+        phone: '+49 987 654321',
+        address: 'Hauptstraße 10\n80331 München',
+        adults: 1,
+        children: 0,
+        amount: '450',
+        depositAmount: '150',
+        depositDue: '2025-11-10',
+        notes: ''
+      }
+    ];
   }
 }
 
@@ -246,32 +410,45 @@ async function saveBooking(booking) {
     console.log('✅ Booking saved:', result);
     await loadBookings();
     buildMonth(view);
+    updateNextAppointment();
     return true;
   } catch (err) {
     console.error('❌ Error saving booking:', err);
-    return false;
+    // For demo: add to local array
+    if (isNewBooking) {
+      booking.id = Date.now().toString();
+      bookings.push(booking);
+    } else {
+      const idx = bookings.findIndex(b => b.id === booking.id);
+      if (idx !== -1) bookings[idx] = booking;
+    }
+    buildMonth(view);
+    updateNextAppointment();
+    return true;
   }
 }
 
-// ---- Clean address function ----
-function cleanAddress(address) {
-  if (!address) return '';
-  
-  // Remove email addresses
-  let cleaned = address.replace(/E-Mail:\s*[\w.-]+@[\w.-]+\.\w+/gi, '');
-  
-  // Remove telefax
-  cleaned = cleaned.replace(/Telefax:\s*/gi, '');
-  
-  // Remove extra whitespace and clean up
-  cleaned = cleaned
-    .split('\n')
-    .map(line => line.trim())
-    .filter(line => line.length > 0)
-    .join('\n');
-  
-  return cleaned;
+async function deleteBooking(bookingId) {
+  try {
+    const res = await fetch(`/api/bookings/${bookingId}`, {
+      method: 'DELETE'
+    });
+    if (!res.ok) throw new Error('Failed to delete booking');
+    console.log('✅ Booking deleted:', bookingId);
+    await loadBookings();
+    buildMonth(view);
+    updateNextAppointment();
+    return true;
+  } catch (err) {
+    console.error('❌ Error deleting booking:', err);
+    // For demo: remove from local array
+    bookings = bookings.filter(b => b.id !== bookingId);
+    buildMonth(view);
+    updateNextAppointment();
+    return true;
+  }
 }
+
 // ---- Helpers ----
 function pad(n) { return n < 10 ? ('0' + n) : '' + n; }
 function iso(d) { return d.toISOString().slice(0, 10); }
@@ -280,13 +457,7 @@ function formatDateEU(dateStr) {
   const [y, m, d] = dateStr.split('-');
   return `${d}.${m}.${y}`;
 }
-function parseEUDate(euStr) {
-  if (!euStr) return null;
-  const [d, m, y] = euStr.split('.');
-  return new Date(y, m - 1, d);
-}
 
-// ---- Calculate nights between two dates ----
 function calculateNights(startISO, endISO) {
   if (!startISO || !endISO) return 0;
   const start = new Date(startISO);
@@ -295,55 +466,10 @@ function calculateNights(startISO, endISO) {
   return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
 }
 
-// ---- Calculate tourist tax (€5 per adult per night) ----
 function calculateTouristTax(nights, adults) {
   return nights * adults * 5;
 }
 
-// ---- Calculate cancellation fee based on current date ----
-function calculateCancellationFee(booking) {
-  if (!booking.amount || !booking.cancellationPolicy) {
-    return { fee: 0, percentage: 0, text: 'Keine Stornobedingungen' };
-  }
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  let policy;
-  try {
-    policy = JSON.parse(booking.cancellationPolicy);
-  } catch (e) {
-    return { fee: 0, percentage: 0, text: 'Fehler beim Parsen' };
-  }
-
-  if (booking.freeCancellation === 'true') {
-    if (policy.length > 0) {
-      const firstPolicyDate = parseEUDate(policy[0].date);
-      if (today < firstPolicyDate) {
-        return { fee: 0, percentage: 0, text: 'Kostenlos stornierbar' };
-      }
-    }
-  }
-
-  let applicablePercentage = 0;
-  for (const p of policy) {
-    const policyDate = parseEUDate(p.date);
-    if (today >= policyDate) {
-      applicablePercentage = parseFloat(p.percentage);
-    }
-  }
-
-  const amount = parseFloat(booking.amount) || 0;
-  const fee = (amount * applicablePercentage) / 100;
-
-  return {
-    fee: fee.toFixed(2),
-    percentage: applicablePercentage,
-    text: applicablePercentage > 0 ? `${applicablePercentage}% = €${fee.toFixed(2)}` : 'Kostenlos stornierbar'
-  };
-}
-
-// ---- Update calculations in modal ----
 function updateCalculations() {
   const start = document.getElementById('mStart').value;
   const end = document.getElementById('mEnd').value;
@@ -356,14 +482,6 @@ function updateCalculations() {
 
   const totalWithTax = amount + touristTax;
   document.getElementById('mTotalWithTax').textContent = `€${totalWithTax.toFixed(2)}`;
-
-  if (currentBooking) {
-    const cancellation = calculateCancellationFee({
-      ...currentBooking,
-      amount: amount.toString()
-    });
-    document.getElementById('mCancellationFee').textContent = cancellation.text;
-  }
 }
 
 // ---- Calendar ----
@@ -418,15 +536,12 @@ function buildMonth(date) {
 
   bookings.forEach(b => {
     const dates = eachDate(b.start, b.end);
-    dates.forEach((dayIso, idx) => {
+    dates.forEach((dayIso) => {
       const cell = cellByDate[dayIso];
       if (!cell) return;
       const seg = document.createElement('div');
       seg.className = 'seg ' + (b.status === 'confirm' ? 'confirm' : 'pending');
-      
-      // Show guest name on every day they're staying
       seg.innerHTML = `${b.guest}`;
-      
       seg.addEventListener('click', () => openModal(b));
       cell.appendChild(seg);
     });
@@ -436,17 +551,18 @@ function buildMonth(date) {
 // ---- Modal ----
 function openModal(b) {
   currentBooking = b;
+  isNewBooking = false;
   const overlay = document.getElementById('overlay');
   overlay.style.display = 'flex';
   
-  document.getElementById('mTitle').textContent = b.guest;
-  document.getElementById('mGuest').value = b.guest;
-  document.getElementById('mStatus').innerHTML = `<span class='status-tag ${b.status}'>${(b.status === 'confirm') ? 'Bestätigt' : 'Ausstehend'}</span>`;
-  document.getElementById('mStart').value = b.start;
-  document.getElementById('mEnd').value = b.end;
-  document.getElementById('mEmail').value = b.email;
+  document.getElementById('mTitle').textContent = b.guest || 'Buchung';
+  document.getElementById('mGuest').value = b.guest || '';
+  document.getElementById('mStatus').value = b.status || 'pending';
+  document.getElementById('mStart').value = b.start || '';
+  document.getElementById('mEnd').value = b.end || '';
+  document.getElementById('mEmail').value = b.email || '';
   document.getElementById('mPhone').value = b.phone || '';
-  document.getElementById('mAddress').value = cleanAddress(b.address) || '';
+  document.getElementById('mAddress').value = b.address || '';
   document.getElementById('mAdults').value = b.adults || 2;
   document.getElementById('mChildren').value = b.children || 0;
   document.getElementById('mAmount').value = b.amount || '';
@@ -454,7 +570,44 @@ function openModal(b) {
   document.getElementById('mDepositDue').value = b.depositDue || '';
   document.getElementById('mNotes').value = b.notes || '';
 
+  // Show delete button for existing bookings
+  document.getElementById('deleteBtn').style.display = b.id ? 'inline-flex' : 'none';
+
   updateCalculations();
+}
+
+function openNewBookingModal() {
+  currentBooking = null;
+  isNewBooking = true;
+  const overlay = document.getElementById('overlay');
+  overlay.style.display = 'flex';
+  
+  // Clear all fields
+  document.getElementById('mTitle').textContent = 'Neue Buchung';
+  document.getElementById('mGuest').value = '';
+  document.getElementById('mStatus').value = 'pending';
+  document.getElementById('mStart').value = '';
+  document.getElementById('mEnd').value = '';
+  document.getElementById('mEmail').value = '';
+  document.getElementById('mPhone').value = '';
+  document.getElementById('mAddress').value = '';
+  document.getElementById('mAdults').value = '2';
+  document.getElementById('mChildren').value = '0';
+  document.getElementById('mAmount').value = '';
+  document.getElementById('mDeposit').value = '';
+  document.getElementById('mDepositDue').value = '';
+  document.getElementById('mNotes').value = '';
+
+  // Hide delete button for new bookings
+  document.getElementById('deleteBtn').style.display = 'none';
+
+  updateCalculations();
+}
+
+function closeModal() {
+  document.getElementById('overlay').style.display = 'none';
+  currentBooking = null;
+  isNewBooking = false;
 }
 
 // ---- Update next appointment widget ----
@@ -462,9 +615,6 @@ function updateNextAppointment() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   
-  console.log('Updating next appointment, bookings:', bookings);
-  
-  // Find next upcoming booking
   const upcoming = bookings
     .filter(b => {
       const start = new Date(b.start);
@@ -473,25 +623,17 @@ function updateNextAppointment() {
     })
     .sort((a, b) => new Date(a.start) - new Date(b.start));
   
-  console.log('Upcoming bookings:', upcoming);
-  
   const widget = document.getElementById('nextAppointment');
   
-  if (!widget) {
-    console.error('Next appointment widget not found!');
-    return;
-  }
+  if (!widget) return;
   
   if (upcoming.length > 0) {
     const next = upcoming[0];
     const startDate = new Date(next.start);
     const isToday = startDate.getTime() === today.getTime();
     
-    console.log('Next booking:', next);
-    
     widget.innerHTML = `
       <div>
-        
         <div style="color:var(--muted);font-size:14px">${next.guest} — ${isToday ? 'Heute' : formatDateEU(next.start)} Anreise</div>
       </div>
       <span class="tag ${next.status}">${next.status === 'confirm' ? 'BESTÄTIGT' : 'AUSSTEHEND'}</span>
@@ -499,7 +641,6 @@ function updateNextAppointment() {
   } else {
     widget.innerHTML = `
       <div>
-        
         <div style="color:var(--muted);font-size:14px">Keine bevorstehenden Buchungen</div>
       </div>
       <span class="tag confirm">—</span>
@@ -507,12 +648,7 @@ function updateNextAppointment() {
   }
 }
 
-function closeModal() {
-  document.getElementById('overlay').style.display = 'none';
-  currentBooking = null;
-}
-
-// ---- Navigation ----
+// ---- Event Listeners ----
 document.getElementById('mClose').addEventListener('click', closeModal);
 document.getElementById('overlay').addEventListener('click', e => {
   if (e.target.id === 'overlay') closeModal();
@@ -533,13 +669,16 @@ document.getElementById('todayBtn').addEventListener('click', () => {
   buildMonth(view);
 });
 
-// ---- Save Button ----
-document.getElementById('saveBtn').addEventListener('click', async () => {
-  if (!currentBooking) return;
+// Add Booking Button
+document.getElementById('addBookingBtn').addEventListener('click', () => {
+  openNewBookingModal();
+});
 
-  const updated = {
-    ...currentBooking,
+// Save Button
+document.getElementById('saveBtn').addEventListener('click', async () => {
+  const bookingData = {
     guest: document.getElementById('mGuest').value,
+    status: document.getElementById('mStatus').value,
     email: document.getElementById('mEmail').value,
     phone: document.getElementById('mPhone').value,
     address: document.getElementById('mAddress').value,
@@ -553,22 +692,51 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
     notes: document.getElementById('mNotes').value
   };
 
-  const success = await saveBooking(updated);
+  // Validation
+  if (!bookingData.guest) {
+    alert('Bitte Gastnamen eingeben');
+    return;
+  }
+  if (!bookingData.start || !bookingData.end) {
+    alert('Bitte Start- und Enddatum eingeben');
+    return;
+  }
+
+  if (!isNewBooking && currentBooking) {
+    bookingData.id = currentBooking.id;
+  }
+
+  const success = await saveBooking(bookingData);
   if (success) {
     alert('✅ Buchung gespeichert!');
-    updateNextAppointment();
     closeModal();
   } else {
     alert('❌ Fehler beim Speichern');
   }
 });
 
-// ---- Auto-recalculate on input change ----
+// Delete Button
+document.getElementById('deleteBtn').addEventListener('click', async () => {
+  if (!currentBooking || !currentBooking.id) return;
+
+  const confirmDelete = confirm(`Möchten Sie die Buchung von ${currentBooking.guest} wirklich löschen?`);
+  if (!confirmDelete) return;
+
+  const success = await deleteBooking(currentBooking.id);
+  if (success) {
+    alert('✅ Buchung gelöscht!');
+    closeModal();
+  } else {
+    alert('❌ Fehler beim Löschen');
+  }
+});
+
+// Auto-recalculate on input change
 ['mStart', 'mEnd', 'mAdults', 'mAmount'].forEach(id => {
   document.getElementById(id).addEventListener('input', updateCalculations);
 });
 
-// ---- Startup ----
+// Startup
 loadBookings().then(() => {
   buildMonth(view);
   updateNextAppointment();
