@@ -119,13 +119,8 @@ function openModal(b) {
   document.getElementById('mStatus').innerHTML = `<span class='status-tag ${b.status}'>${(b.status === 'confirm') ? 'Bestätigt' : 'Ausstehend'}</span>`;
   document.getElementById('mDates').textContent = `${formatDateEU(b.start)} bis ${formatDateEU(b.end)}`;
   document.getElementById('mEmail').textContent = b.email;
-  document.getElementById('mPhone').textContent = b.phone || 'Nicht angegeben';
-  document.getElementById('mAddress').textContent = b.address || 'Nicht angegeben';
-  document.getElementById('mAmount').textContent = b.amount ? `€${b.amount}` : 'Nicht angegeben';
-  document.getElementById('mDeposit').textContent = b.depositAmount ? `€${b.depositAmount}` : 'Nicht angegeben';
-  document.getElementById('mDepositDue').textContent = b.depositDue ? formatDateEU(b.depositDue) : 'Nicht angegeben';
+  document.getElementById('mAmount').textContent = b.amount;
   document.getElementById('mGuests').textContent = b.guests;
-  document.getElementById('mNotes').textContent = b.notes || 'Keine Notizen';
 
   const emailsEl = document.getElementById('mEmails');
   emailsEl.innerHTML = '';
