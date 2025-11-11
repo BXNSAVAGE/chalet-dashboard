@@ -61,19 +61,61 @@ export async function onRequest(context) {
       return out;
     }
 
-    // recursively search for header
-    function findHeaderDeep(payload, name) {
-      if (!payload) return null;
-      const headers = payload.headers || [];
-      const found = headers.find(h => h.name.toLowerCase() === name.toLowerCase());
-      if (found) return found.value;
-      if (payload.parts) {
-        for (const p of payload.parts) {
-          const val = findHeaderDeep(p, name);
-          if (val) return val;
-        }
+    // Find header - search in top-level headers only (more reliable)
+    function findHeader(payload, name) {
+      if (!payload || !payload.headers) return null;
+      const found = payload.headers.find(h => 
+        h.name && h.name.toLowerCase() === name.toLowerCase()
+      );
+      return found ? found.value : null;
+    }
+
+    // Extract sender name from From header
+    function extractFromName(fromHeader) {
+      if (!fromHeader) return 'Unbekannt';
+      
+      // Try to match "Name <email@example.com>" format
+      const nameEmailMatch = fromHeader.match(/^"?([^"<]+)"?\s*<(.+)>$/);
+      if (nameEmailMatch) {
+        const name = nameEmailMatch[1].trim();
+        return name || nameEmailMatch[2].trim();
       }
-      return null;
+      
+      // Try to match "<email@example.com>" format
+      const emailOnlyMatch = fromHeader.match(/^<(.+)>$/);
+      if (emailOnlyMatch) {
+        return emailOnlyMatch[1].trim();
+      }
+      
+      // Return as-is if it's just an email or name
+      return fromHeader.trim();
+    }
+
+    // Format date in German locale
+    function formatDate(dateHeader) {
+      if (!dateHeader) return '';
+      
+      try {
+        // Parse the date
+        const date = new Date(dateHeader);
+        
+        // Check if date is valid
+        if (isNaN(date.getTime())) {
+          return dateHeader; // Return original if parsing fails
+        }
+        
+        // Format in German locale
+        return date.toLocaleString('de-DE', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        });
+      } catch (e) {
+        return dateHeader; // Return original on error
+      }
     }
 
     const details = [];
@@ -85,28 +127,18 @@ export async function onRequest(context) {
       );
       const msg = await msgRes.json();
 
-      const subject = findHeaderDeep(msg.payload, 'Subject') || '(Kein Betreff)';
-      const fromHeader = findHeaderDeep(msg.payload, 'From') || 'Unbekannt';
-      const dateHeader = findHeaderDeep(msg.payload, 'Date') || '';
+      // Extract headers from top-level payload
+      const subject = findHeader(msg.payload, 'Subject') || '(Kein Betreff)';
+      const fromHeader = findHeader(msg.payload, 'From') || 'Unbekannt';
+      const dateHeader = findHeader(msg.payload, 'Date') || '';
 
-      let fromName = fromHeader;
-      const match = fromHeader.match(/(.*)<(.*)>/);
-      if (match) fromName = match[1].trim() || match[2].trim();
+      // Extract clean sender name
+      const fromName = extractFromName(fromHeader);
 
-      let dateFormatted = '';
-      if (dateHeader) {
-        const d = new Date(dateHeader);
-        if (!isNaN(d)) {
-          dateFormatted = d.toLocaleString('de-DE', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          });
-        }
-      }
+      // Format date
+      const dateFormatted = formatDate(dateHeader);
 
+      // Extract body
       let body = extractBody(msg.payload);
       if (!body && msg.snippet) body = msg.snippet;
 
