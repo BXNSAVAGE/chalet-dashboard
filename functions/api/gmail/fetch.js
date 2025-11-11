@@ -9,6 +9,7 @@ export async function onRequest(context) {
 
     let { access_token, refresh_token, expires_at } = row;
 
+    // Refresh if needed
     if (Date.now() / 1000 > expires_at - 60) {
       const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
@@ -30,6 +31,7 @@ export async function onRequest(context) {
       }
     }
 
+    // === list messages ===
     const listRes = await fetch(
       'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=5',
       { headers: { Authorization: `Bearer ${access_token}` } }
@@ -37,6 +39,7 @@ export async function onRequest(context) {
     const list = await listRes.json();
     if (!list.messages) return new Response('No messages', { status: 200 });
 
+    // === helpers ===
     function safeDecode(b64) {
       try {
         const cleaned = b64.replace(/-/g, '+').replace(/_/g, '/');
@@ -58,15 +61,16 @@ export async function onRequest(context) {
       return out;
     }
 
-    function findHeaderRecursive(payload, name) {
+    // recursively search for header
+    function findHeaderDeep(payload, name) {
       if (!payload) return null;
       const headers = payload.headers || [];
       const found = headers.find(h => h.name.toLowerCase() === name.toLowerCase());
       if (found) return found.value;
       if (payload.parts) {
         for (const p of payload.parts) {
-          const res = findHeaderRecursive(p, name);
-          if (res) return res;
+          const val = findHeaderDeep(p, name);
+          if (val) return val;
         }
       }
       return null;
@@ -81,9 +85,9 @@ export async function onRequest(context) {
       );
       const msg = await msgRes.json();
 
-      const subject = findHeaderRecursive(msg.payload, 'Subject') || '(Kein Betreff)';
-      const fromHeader = findHeaderRecursive(msg.payload, 'From') || 'Unbekannt';
-      const dateHeader = findHeaderRecursive(msg.payload, 'Date') || '';
+      const subject = findHeaderDeep(msg.payload, 'Subject') || '(Kein Betreff)';
+      const fromHeader = findHeaderDeep(msg.payload, 'From') || 'Unbekannt';
+      const dateHeader = findHeaderDeep(msg.payload, 'Date') || '';
 
       let fromName = fromHeader;
       const match = fromHeader.match(/(.*)<(.*)>/);
@@ -106,7 +110,13 @@ export async function onRequest(context) {
       let body = extractBody(msg.payload);
       if (!body && msg.snippet) body = msg.snippet;
 
-      details.push({ id: m.id, from: fromName, subject, date: dateFormatted, body });
+      details.push({
+        id: m.id,
+        from: fromName,
+        subject,
+        date: dateFormatted,
+        body
+      });
     }
 
     return new Response(JSON.stringify(details, null, 2), {
