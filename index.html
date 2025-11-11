@@ -704,12 +704,12 @@ async function assignEmailToBooking(emailId, bookingId) {
   }
 }
 
-async function sendEmail(to, subject, body) {
+async function sendEmail(to, subject, body, from = 'haus.bischof@st-anton.at') {
   try {
     const res = await fetch('/api/gmail/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to, subject, body })
+      body: JSON.stringify({ to, subject, body, from })
     });
     if (!res.ok) throw new Error('Send failed');
     return true;
