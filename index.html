@@ -65,6 +65,14 @@
       display:grid; grid-template-columns:repeat(7,1fr); gap:10px; padding:12px;
       background:transparent; border-top:1px solid #eceef2;
     }
+    .dow {
+      text-align: center;
+      font-weight: 700;
+      font-size: 12px;
+      color: #64748b;
+      padding: 8px 0;
+      border-bottom: 1px solid #eef0f4;
+    }
     .cell {
       aspect-ratio:1/1; background:#fff; border:1px solid #eef0f4;
       border-radius:12px; position:relative; overflow:hidden;
@@ -268,9 +276,9 @@
         </div>
         <div class="row editable">
           <label>Status</label>
-          <select id="mStatus" style="padding: 10px 12px; font-weight: 600;">
-            <option value="pending" style="background: #ffedd5; color: #ea580c;">🟠 Ausstehend</option>
-            <option value="confirm" style="background: #dcfce7; color: #16a34a;">🟢 Bestätigt</option>
+          <select id="mStatus" class="status-pending">
+            <option value="pending">Ausstehend</option>
+            <option value="confirm">Bestätigt</option>
           </select>
         </div>
         <div class="row editable full-width">
@@ -400,30 +408,40 @@ async function loadBookings() {
 }
 
 async function saveBooking(booking) {
+  // Make sure we have an ID
+  if (!booking.id) {
+    booking.id = 'booking_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    console.log('Generated ID in saveBooking:', booking.id);
+  }
+
   try {
     const res = await fetch('/api/bookings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(booking)
     });
+    
+    if (!res.ok) {
+      throw new Error(`API error: ${res.status}`);
+    }
+    
     const result = await res.json();
-    console.log('✅ Booking saved:', result);
+    console.log('✅ Booking saved via API:', result);
     await loadBookings();
     buildMonth(view);
     updateNextAppointment();
     return true;
   } catch (err) {
-    console.error('❌ Error saving booking, using local storage:', err);
+    console.error('❌ API not available, using local storage:', err);
     // For demo: add to local array
     if (isNewBooking) {
-      booking.id = Date.now().toString();
       bookings.push(booking);
-      console.log('Added new booking:', booking);
+      console.log('Added new booking locally:', booking);
     } else {
       const idx = bookings.findIndex(b => b.id === booking.id);
       if (idx !== -1) {
         bookings[idx] = booking;
-        console.log('Updated booking:', booking);
+        console.log('Updated booking locally:', booking);
       }
     }
     console.log('Current bookings:', bookings);
@@ -506,6 +524,15 @@ function buildMonth(date) {
 
   calTitle.textContent = first.toLocaleDateString('de-AT', { month: 'long', year: 'numeric' });
 
+  // Add day of week headers
+  const dows = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
+  dows.forEach(txt => {
+    const el = document.createElement('div');
+    el.className = 'dow';
+    el.textContent = txt;
+    calGrid.appendChild(el);
+  });
+
   for (let i = 0; i < startOffset; i++) {
     const empty = document.createElement('div');
     empty.className = 'cell';
@@ -562,7 +589,11 @@ function openModal(b) {
   
   document.getElementById('mTitle').textContent = b.guest || 'Buchung';
   document.getElementById('mGuest').value = b.guest || '';
-  document.getElementById('mStatus').value = b.status || 'pending';
+  
+  const statusSelect = document.getElementById('mStatus');
+  statusSelect.value = b.status || 'pending';
+  statusSelect.className = (b.status === 'confirm') ? 'status-confirm' : 'status-pending';
+  
   document.getElementById('mStart').value = b.start || '';
   document.getElementById('mEnd').value = b.end || '';
   document.getElementById('mEmail').value = b.email || '';
@@ -590,7 +621,11 @@ function openNewBookingModal() {
   // Clear all fields
   document.getElementById('mTitle').textContent = 'Neue Buchung';
   document.getElementById('mGuest').value = '';
-  document.getElementById('mStatus').value = 'pending';
+  
+  const statusSelect = document.getElementById('mStatus');
+  statusSelect.value = 'pending';
+  statusSelect.className = 'status-pending';
+  
   document.getElementById('mStart').value = '';
   document.getElementById('mEnd').value = '';
   document.getElementById('mEmail').value = '';
@@ -707,13 +742,16 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
     return;
   }
 
-  // Keep the ID if editing existing booking
-  if (!isNewBooking && currentBooking && currentBooking.id) {
+  // Generate ID BEFORE saving if it's a new booking
+  if (isNewBooking) {
+    bookingData.id = 'booking_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  } else if (currentBooking && currentBooking.id) {
     bookingData.id = currentBooking.id;
   }
 
   console.log('Saving booking:', bookingData);
   console.log('Is new booking:', isNewBooking);
+  console.log('Booking ID:', bookingData.id);
 
   const success = await saveBooking(bookingData);
   if (success) {
@@ -722,6 +760,11 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
   } else {
     alert('❌ Fehler beim Speichern');
   }
+});
+
+// Update status select color on change
+document.getElementById('mStatus').addEventListener('change', function() {
+  this.className = this.value === 'confirm' ? 'status-confirm' : 'status-pending';
 });
 
 // Delete Button
