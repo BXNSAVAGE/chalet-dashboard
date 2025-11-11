@@ -775,7 +775,6 @@ function getBookingColor(guestName) {
 }
 
 
-// Replace your displayEmails() function with this:
 function displayEmails() {
   const emailList = document.getElementById('emailList');
   const emailCount = document.getElementById('emailCount');
@@ -793,14 +792,26 @@ function displayEmails() {
     const booking = bookings.find(b => b.id === email.booking_id);
     const badge = booking ? `<span class="email-badge">📎 ${booking.guest}</span>` : '';
     
+    // Check if this email matches any booking email
+    const matchingBooking = !email.booking_id && email.fromEmail ? 
+      bookings.find(b => b.email && b.email.toLowerCase() === email.fromEmail.toLowerCase()) : null;
+    const matchBadge = matchingBooking ? 
+      `<span class="email-badge" style="background:#fef3c7;color:#d97706">✨ ${matchingBooking.guest}</span>` : '';
+    
     return `
       <div class="email-item ${assigned}" data-email-id="${email.id}">
         <div class="email-from">${email.from || 'Unbekannt'}</div>
         <div class="email-subject">${email.subject || '(Kein Betreff)'}</div>
         <div class="email-snippet">${email.body || ''}</div>
         <div class="email-meta">
-          <span class="email-date">${email.date || ''}</span>
-          ${badge}
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <span class="email-date">${email.date || ''}</span>
+            ${email.fromEmail ? `<span class="email-date">${email.fromEmail}</span>` : ''}
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            ${badge}
+            ${matchBadge}
+          </div>
         </div>
       </div>
     `;
@@ -818,7 +829,10 @@ function displayEmails() {
 // Also fix openEmailModal():
 function openEmailModal(email) {
   currentEmail = email;
-  document.getElementById('emailDetailFrom').textContent = email.from || 'Unbekannt';
+  const fromDisplay = email.fromEmail ? 
+    `${email.from || 'Unbekannt'} <${email.fromEmail}>` : 
+    (email.from || 'Unbekannt');
+  document.getElementById('emailDetailFrom').textContent = fromDisplay;
   document.getElementById('emailDetailSubject').textContent = email.subject || '(Kein Betreff)';
   document.getElementById('emailDetailDate').textContent = email.date || '';
   document.getElementById('emailDetailBody').textContent = email.body || '';
@@ -829,6 +843,7 @@ function openEmailModal(email) {
   
   document.getElementById('emailOverlay').style.display = 'flex';
 }
+
 
 
 function closeEmailModal() {
@@ -1074,11 +1089,12 @@ function updateBookingEmails() {
     container.innerHTML = bookingEmailsList.map(email => `
       <div class="booking-email-item">
         <div class="booking-email-subject">${email.subject || '(Kein Betreff)'}</div>
-        <div class="booking-email-date">${email.date || ''} - ${email.from || 'Unbekannt'}</div>
+        <div class="booking-email-date">${email.date || ''} - ${email.from || 'Unbekannt'}${email.fromEmail ? ` <${email.fromEmail}>` : ''}</div>
       </div>
     `).join('');
   }
 }
+
 
 function updateNextAppointment() {
   const today = new Date();
