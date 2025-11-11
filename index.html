@@ -620,24 +620,26 @@ function buildMonth(date) {
     return out;
   }
 
-  bookings.forEach(b => {
-    console.log('Processing booking:', b.guest, 'from', b.start, 'to', b.end);
-    const dates = eachDate(b.start, b.end);
-    console.log('Dates for this booking:', dates);
-    dates.forEach((dayIso) => {
-      const cell = cellByDate[dayIso];
-      if (!cell) {
-        console.log('Cell not found for date:', dayIso);
-        return;
-      }
-      const seg = document.createElement('div');
-      seg.className = 'seg ' + (b.status === 'confirm' ? 'confirm' : 'pending');
-      seg.innerHTML = `${b.guest}`;
-      seg.addEventListener('click', () => openModal(b));
-      cell.appendChild(seg);
-      console.log('Added segment for', b.guest, 'on', dayIso);
-    });
+bookings.forEach(b => {
+  console.log('Processing booking:', b.guest, 'from', b.start, 'to', b.end);
+  const dates = eachDate(b.start, b.end);
+  console.log('Dates for this booking:', dates);
+  const bookingColor = getBookingColor(b.guest);
+  dates.forEach((dayIso) => {
+    const cell = cellByDate[dayIso];
+    if (!cell) {
+      console.log('Cell not found for date:', dayIso);
+      return;
+    }
+    const seg = document.createElement('div');
+    seg.className = 'seg ' + (b.status === 'confirm' ? 'confirm' : 'pending');
+    seg.style.backgroundColor = bookingColor;
+    seg.innerHTML = `${b.guest}`;
+    seg.addEventListener('click', () => openModal(b));
+    cell.appendChild(seg);
+    console.log('Added segment for', b.guest, 'on', dayIso);
   });
+});
   
   console.log('Calendar built successfully');
 }
@@ -740,6 +742,14 @@ function updateNextAppointment() {
       </div>
       <span class="tag ${next.status}">${next.status === 'confirm' ? 'BESTÄTIGT' : 'AUSSTEHEND'}</span>
     `;
+    
+    // Make widget clickable to jump to this booking's month
+    widget.style.cursor = 'pointer';
+    widget.onclick = () => {
+      const bookingDate = new Date(next.start);
+      view = new Date(bookingDate.getFullYear(), bookingDate.getMonth(), 1);
+      buildMonth(view);
+    };
   } else {
     widget.innerHTML = `
       <div>
@@ -747,9 +757,10 @@ function updateNextAppointment() {
       </div>
       <span class="tag confirm">—</span>
     `;
+    widget.style.cursor = 'default';
+    widget.onclick = null;
   }
 }
-
 // ---- Event Listeners ----
 document.getElementById('mClose').addEventListener('click', closeModal);
 document.getElementById('overlay').addEventListener('click', e => {
