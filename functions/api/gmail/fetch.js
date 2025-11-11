@@ -5,11 +5,11 @@ export async function onRequest(context) {
     const row = await env.DB.prepare(
       'SELECT access_token, refresh_token, expires_at FROM gmail_tokens ORDER BY rowid DESC LIMIT 1'
     ).first();
-
-    if (!row) return new Response('No Gmail token', { status: 401 });
+    if (!row) return new Response('No Gmail token stored', { status: 401 });
 
     let { access_token, refresh_token, expires_at } = row;
 
+    // Refresh token if needed
     if (Date.now() / 1000 > expires_at - 60) {
       const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
@@ -31,44 +31,70 @@ export async function onRequest(context) {
       }
     }
 
-    // Step 1: get latest message IDs
+    // Step 1: get latest 5 message IDs
     const listRes = await fetch(
       'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=5',
       { headers: { Authorization: `Bearer ${access_token}` } }
     );
     const list = await listRes.json();
-    if (!list.messages) return new Response('No messages', { status: 200 });
+    if (!list.messages) return new Response('No messages found', { status: 200 });
 
-  const details = [];
-for (const m of list.messages) {
-  const msgRes = await fetch(
-    `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`,
-    { headers: { Authorization: `Bearer ${access_token}` } }
-  );
-  const msg = await msgRes.json();
+    // Step 2: fetch each message metadata
+    const details = [];
+    for (const m of list.messages) {
+      const msgRes = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`,
+        { headers: { Authorization: `Bearer ${access_token}` } }
+      );
+      const msg = await msgRes.json();
 
-  const headers = msg.payload?.headers || [];
-  const subject = headers.find(h => h.name === 'Subject')?.value || '(Kein Betreff)';
-  const fromRaw = headers.find(h => h.name === 'From')?.value || 'Unbekannt';
-  const dateRaw = headers.find(h => h.name === 'Date')?.value;
+      const headers = msg.payload?.headers || [];
 
-  // Parse the sender nicely: "John Doe <john@example.com>" → { name, email }
-  const fromMatch = fromRaw.match(/(.*)<(.*)>/);
-  const from = fromMatch
-    ? { name: fromMatch[1].trim() || fromMatch[2].trim(), email: fromMatch[2].trim() }
-    : { name: fromRaw.trim(), email: fromRaw.trim() };
+      const subject = headers.find(h => h.name === 'Subject')?.value || '(Kein Betreff)';
+      const fromHeader = headers.find(h => h.name === 'From')?.value || 'Unbekannt';
+      const dateHeader = headers.find(h => h.name === 'Date')?.value || null;
 
-  // Format date safely
-  let date = null;
-  try {
-    if (dateRaw) date = new Date(dateRaw).toISOString();
-  } catch { date = null; }
+      // Parse readable sender name
+      let fromName = fromHeader;
+      const match = fromHeader.match(/(.*)<(.*)>/);
+      if (match) {
+        fromName = match[1].trim() || match[2].trim();
+      }
 
-  details.push({
-    id: m.id,
-    subject,
-    from: from.name,
-    email: from.email,
-    date,
-  });
+      // Parse readable date
+      let dateFormatted = '';
+      try {
+        if (dateHeader) {
+          const d = new Date(dateHeader);
+          if (!isNaN(d)) {
+            dateFormatted = d.toLocaleString('de-DE', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            });
+          }
+        }
+      } catch (_) {}
+
+      // Gmail includes a text preview (snippet)
+      const snippet = msg.snippet || '';
+
+      details.push({
+        id: m.id,
+        from: fromName,
+        subject,
+        date: dateFormatted,
+        snippet,
+      });
+    }
+
+    return new Response(JSON.stringify(details), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+  } catch (err) {
+    return new Response('Server error: ' + err.stack, { status: 500 });
+  }
 }
