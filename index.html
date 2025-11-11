@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Chalet Dashboard — Apple-Style MVP (DE)</title>
+  <title>Chalet Dashboard — Gmail Integration</title>
   <style>
     :root {
       --bg:#f7f7f9; --glass:#ffffffcc; --text:#0b0c0f; --muted:#6b7280;
@@ -23,10 +23,11 @@
     .pill { padding:8px 12px; border-radius:999px; background:#eef2ff; color:#334155; font-weight:600; }
 
     main.grid {
-      display:grid; gap:16px; padding:16px; max-width:1500px; margin:0 auto;
-      grid-template-columns:280px 1fr 360px;
+      display:grid; gap:16px; padding:16px; max-width:1800px; margin:0 auto;
+      grid-template-columns:280px 1fr 380px;
     }
-    @media(max-width:1200px){ main.grid { grid-template-columns:1fr; } }
+    @media(max-width:1400px){ main.grid { grid-template-columns:1fr 380px; } }
+    @media(max-width:900px){ main.grid { grid-template-columns:1fr; } }
 
     .card {
       background:var(--glass); border-radius:var(--radius); box-shadow:var(--shadow);
@@ -37,11 +38,13 @@
     .btn {
       display:inline-flex; align-items:center; gap:8px; padding:10px 14px;
       border:0; border-radius:12px; background:linear-gradient(#0a84ff,#0066d6);
-      color:#fff; font-weight:600; box-shadow:var(--shadow); cursor:pointer;
+      color:#fff; font-weight:600; box-shadow:var(--shadow); cursor:pointer; transition: all 0.2s;
     }
+    .btn:hover { transform: translateY(-1px); box-shadow: 0 12px 28px rgba(0,0,0,.1); }
     .btn.secondary { background:#eef1f6; color:#0b0c0f; }
-    .btn.ghost { background:transparent; border:1px solid #e5e7eb; color:#0b0c0f; }
+    .btn.ghost { background:transparent; border:1px solid #e5e7eb; color:#0b0c0f; box-shadow: none; }
     .btn.danger { background:linear-gradient(#ef4444,#dc2626); color:#fff; }
+    .btn.small { padding:6px 10px; font-size:13px; }
 
     .stat {
       display:flex; align-items:center; justify-content:space-between; padding:12px;
@@ -86,33 +89,104 @@
     .seg.pending { background:var(--pending); }
     .seg.confirm { background:var(--good); }
 
-    .timeline { position:relative; padding-left:18px; }
-    .timeline:before {
-      content:""; position:absolute; left:7px; top:8px; bottom:8px; width:2px; background:#e5e7eb;
+    /* Email Sidebar */
+    .email-list {
+      max-height: calc(100vh - 200px);
+      overflow-y: auto;
     }
-    .tl-item { position:relative; margin:0 0 14px 0; }
-    .tl-item:before {
-      content:""; position:absolute; left:-11px; top:6px; width:10px; height:10px;
-      background:#fff; border:2px solid #94a3b8; border-radius:50%;
+    .email-item {
+      background:#fff; border:1px solid #eef0f4; border-radius:12px;
+      padding:12px; margin-bottom:10px; cursor:pointer; transition: all 0.2s;
     }
-    .tl-time { color:#64748b; font-size:12px; margin-bottom:4px; }
-    .tl-card { background:#fff; border:1px solid #eef0f4; border-radius:12px; padding:10px 12px; }
+    .email-item:hover {
+      border-color: var(--accent);
+      box-shadow: 0 4px 12px rgba(0,0,0,.08);
+    }
+    .email-item.unread {
+      background:#f0f9ff;
+      border-color: #bae6fd;
+    }
+    .email-item.assigned {
+      border-left: 4px solid var(--good);
+    }
+    .email-from {
+      font-weight:700;
+      font-size:14px;
+      color:var(--text);
+      margin-bottom:4px;
+    }
+    .email-subject {
+      font-size:13px;
+      color:#64748b;
+      margin-bottom:6px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .email-snippet {
+      font-size:12px;
+      color:#94a3b8;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+    .email-meta {
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      margin-top:8px;
+      padding-top:8px;
+      border-top:1px solid #eef0f4;
+    }
+    .email-date {
+      font-size:11px;
+      color:#94a3b8;
+    }
+    .email-badge {
+      font-size:10px;
+      padding:3px 8px;
+      border-radius:999px;
+      background:#dcfce7;
+      color:var(--good);
+      font-weight:700;
+    }
+
+    .auth-banner {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 16px;
+      border-radius: 12px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
 
     .overlay {
       position:fixed; inset:0; background:rgba(0,0,0,.25);
       display:none; align-items:center; justify-content:center; padding:16px; z-index:100;
     }
     .modal {
-      width:min(780px,96vw); background:#fff; border-radius:20px;
+      width:min(900px,96vw); 
+      max-height: 90vh;
+      background:#fff; border-radius:20px;
       box-shadow:0 24px 60px rgba(0,0,0,.18); overflow:hidden;
+      display: flex;
+      flex-direction: column;
     }
     .modal-head {
       display:flex; align-items:center; justify-content:space-between;
       padding:16px 18px; border-bottom:1px solid #eef0f4;
     }
     .modal-body {
-      padding:16px 18px; display:grid; grid-template-columns:1fr 1fr; gap:12px;
-      max-height: 70vh; overflow-y: auto;
+      padding:16px 18px; 
+      overflow-y: auto;
+      flex: 1;
+    }
+    .modal-grid {
+      display:grid; grid-template-columns:1fr 1fr; gap:12px;
     }
     .row {
       background:#f8fafc; border:1px solid #eef0f4; border-radius:12px;
@@ -136,11 +210,14 @@
     }
     .row textarea {
       resize: vertical;
-      min-height: 60px;
+      min-height: 80px;
     }
     .row.editable {
       background: #fff;
       padding: 10px 12px;
+    }
+    .row.full-width {
+      grid-column: 1 / span 2;
     }
     .date-range {
       display: flex;
@@ -161,21 +238,6 @@
     .number-field {
       flex: 1;
     }
-    .number-field label {
-      display: block;
-      color: #64748b;
-      font-size: 12px;
-      margin-bottom: 6px;
-    }
-    .number-field input {
-      width: 100%;
-      padding: 8px 10px;
-      border: 1px solid #e5e7eb;
-      border-radius: 8px;
-      font-size: 14px;
-      font-family: inherit;
-      background: #fff;
-    }
     .calculated-value {
       background: rgba(10, 132, 255, 0.08);
       padding: 10px 12px;
@@ -191,9 +253,6 @@
       font-weight: 700;
       color: var(--pending);
       font-size: 14px;
-    }
-    .row.full-width {
-      grid-column: 1 / span 2;
     }
 
     .modal-actions {
@@ -215,19 +274,84 @@
     }
     .status-tag.confirm { background:#dcfce7; color:var(--good); }
     .status-tag.pending { background:#ffedd5; color:var(--pending); }
+
+    .email-section {
+      background:#f8fafc;
+      border:1px solid #eef0f4;
+      border-radius:12px;
+      padding:12px;
+      margin-bottom:12px;
+    }
+    .email-section h4 {
+      font-size:14px;
+      margin-bottom:10px;
+      color:var(--text);
+    }
+    .booking-email-item {
+      background:#fff;
+      border:1px solid #e5e7eb;
+      border-radius:8px;
+      padding:8px 10px;
+      margin-bottom:8px;
+      font-size:13px;
+    }
+    .booking-email-item:last-child {
+      margin-bottom:0;
+    }
+    .booking-email-subject {
+      font-weight:600;
+      margin-bottom:3px;
+    }
+    .booking-email-date {
+      color:#94a3b8;
+      font-size:11px;
+    }
+
+    .tabs {
+      display:flex;
+      gap:8px;
+      border-bottom:2px solid #eef0f4;
+      margin-bottom:16px;
+    }
+    .tab {
+      padding:10px 16px;
+      border:none;
+      background:transparent;
+      color:#64748b;
+      font-weight:600;
+      cursor:pointer;
+      position:relative;
+      transition: all 0.2s;
+    }
+    .tab:hover {
+      color:var(--text);
+    }
+    .tab.active {
+      color:var(--accent);
+    }
+    .tab.active::after {
+      content:'';
+      position:absolute;
+      bottom:-2px;
+      left:0;
+      right:0;
+      height:2px;
+      background:var(--accent);
+    }
   </style>
 </head>
 <body>
   <header>
     <div class="brand">🏔️ Chalet Manager</div>
-    <span class="pill">MVP</span>
+    <span class="pill">Gmail Integration</span>
     <div style="margin-left:auto;display:flex;gap:8px">
-      <button class="btn secondary" id="checkInboxBtn">Posteingang prüfen</button>
+      <button class="btn secondary" id="syncEmailsBtn">📧 E-Mails synchronisieren</button>
       <button class="btn" id="addBookingBtn">Buchung hinzufügen</button>
     </div>
   </header>
+  
   <main class="grid">
-    <aside>
+    <aside style="display:none" class="sidebar-left">
       <div class="card">
         <h3>Nächster Termin</h3>
         <div class="stat" style="margin-top:8px" id="nextAppointment">
@@ -238,6 +362,7 @@
         </div>
       </div>
     </aside>
+    
     <section class="card calendar">
       <div class="cal-head">
         <div class="cal-title" id="calTitle">Kalender</div>
@@ -253,229 +378,288 @@
       </div>
       <div class="cal-grid" id="calGrid"></div>
     </section>
+    
     <section>
       <div class="card">
-        <h3>Posteingang – Verlauf</h3>
-        <div class="timeline" id="timeline">
-          <div class="tl-item"><div class="tl-time">09:12</div><div class="tl-card">Anfrage: 3.–6. Jan (2 Erwachsene)</div></div>
-          <div class="tl-item"><div class="tl-time">08:01</div><div class="tl-card">Anzahlung eingegangen — Novak</div></div>
+        <div id="authBanner" style="display:none" class="auth-banner">
+          <div>
+            <strong>Gmail nicht verbunden</strong>
+            <div style="font-size:14px;opacity:0.9;margin-top:4px">
+              Verbinden Sie Ihr Gmail-Konto, um E-Mails zu verwalten
+            </div>
+          </div>
+          <button class="btn" id="connectGmailBtn">Verbinden</button>
+        </div>
+        
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <h3 style="margin:0">📬 E-Mail Posteingang</h3>
+          <span id="emailCount" class="pill" style="font-size:12px">0</span>
+        </div>
+        
+        <div id="emailList" class="email-list">
+          <div style="text-align:center;color:var(--muted);padding:20px">
+            Keine E-Mails geladen
+          </div>
         </div>
       </div>
     </section>
   </main>
-  <div class="overlay" id="overlay">
+
+  <!-- Booking Modal -->
+  <div class="overlay" id="bookingOverlay">
     <div class="modal">
       <div class="modal-head">
         <div class="modal-title" id="mTitle">Buchung</div>
         <button class="btn ghost" id="mClose">✕</button>
       </div>
+      
+      <div class="tabs">
+        <button class="tab active" data-tab="details">Details</button>
+        <button class="tab" data-tab="emails">E-Mails (<span id="bookingEmailCount">0</span>)</button>
+      </div>
+      
       <div class="modal-body">
-        <div class="row editable">
-          <label>Gast</label>
-          <input type="text" id="mGuest" />
-        </div>
-        <div class="row editable">
-          <label>Status</label>
-          <select id="mStatus" class="status-pending">
-            <option value="pending">Ausstehend</option>
-            <option value="confirm">Bestätigt</option>
-          </select>
-        </div>
-        <div class="row editable full-width">
-          <label>Zeitraum</label>
-          <div class="date-range">
-            <input type="date" id="mStart" />
-            <span>bis</span>
-            <input type="date" id="mEnd" />
+        <div id="tabDetails">
+          <div class="modal-grid">
+            <div class="row editable">
+              <label>Gast</label>
+              <input type="text" id="mGuest" />
+            </div>
+            <div class="row editable">
+              <label>Status</label>
+              <select id="mStatus" class="status-pending">
+                <option value="pending">Ausstehend</option>
+                <option value="confirm">Bestätigt</option>
+              </select>
+            </div>
+            <div class="row editable full-width">
+              <label>Zeitraum</label>
+              <div class="date-range">
+                <input type="date" id="mStart" />
+                <span>bis</span>
+                <input type="date" id="mEnd" />
+              </div>
+            </div>
+            <div class="row editable">
+              <label>E-Mail</label>
+              <input type="email" id="mEmail" />
+            </div>
+            <div class="row editable">
+              <label>Telefon</label>
+              <input type="text" id="mPhone" />
+            </div>
+            <div class="row editable full-width">
+              <label>Adresse</label>
+              <textarea id="mAddress"></textarea>
+            </div>
+            <div class="row editable full-width">
+              <label>Gäste</label>
+              <div class="number-fields">
+                <div class="number-field">
+                  <label>Erwachsene</label>
+                  <input type="number" id="mAdults" min="0" value="2" />
+                </div>
+                <div class="number-field">
+                  <label>Kinder</label>
+                  <input type="number" id="mChildren" min="0" value="0" />
+                </div>
+              </div>
+            </div>
+            <div class="row editable">
+              <label>Gesamtbetrag</label>
+              <input type="text" id="mAmount" placeholder="0.00" />
+            </div>
+            <div class="row editable">
+              <label>Anzahlung</label>
+              <input type="text" id="mDeposit" placeholder="0.00" />
+            </div>
+            <div class="row editable">
+              <label>Anzahlung fällig</label>
+              <input type="date" id="mDepositDue" />
+            </div>
+            <div class="row">
+              <label>Aufenthaltsabgabe</label>
+              <div class="calculated-value" id="mTouristTax">€0.00</div>
+            </div>
+            <div class="row">
+              <label>Gesamtpreis inkl.</label>
+              <div class="calculated-value" id="mTotalWithTax">€0.00</div>
+            </div>
+            <div class="row">
+              <label>Stornokosten</label>
+              <div class="warning-value" id="mCancellationFee">Kostenlos stornierbar</div>
+            </div>
+            <div class="row editable full-width">
+              <label>Notizen</label>
+              <textarea id="mNotes"></textarea>
+            </div>
           </div>
         </div>
-        <div class="row editable">
-          <label>E-Mail</label>
-          <input type="email" id="mEmail" />
-        </div>
-        <div class="row editable">
-          <label>Telefon</label>
-          <input type="text" id="mPhone" />
-        </div>
-        <div class="row editable full-width">
-          <label>Adresse</label>
-          <textarea id="mAddress"></textarea>
-        </div>
-        <div class="row editable full-width">
-          <label>Gäste</label>
-          <div class="number-fields">
-            <div class="number-field">
-              <label>Erwachsene</label>
-              <input type="number" id="mAdults" min="0" value="2" />
-            </div>
-            <div class="number-field">
-              <label>Kinder</label>
-              <input type="number" id="mChildren" min="0" value="0" />
+        
+        <div id="tabEmails" style="display:none">
+          <div class="email-section">
+            <h4>Zugewiesene E-Mails</h4>
+            <div id="bookingEmails">
+              <div style="text-align:center;color:var(--muted);padding:20px">
+                Keine E-Mails zugewiesen
+              </div>
             </div>
           </div>
-        </div>
-        <div class="row editable">
-          <label>Gesamtbetrag</label>
-          <input type="text" id="mAmount" placeholder="0.00" />
-        </div>
-        <div class="row editable">
-          <label>Anzahlung</label>
-          <input type="text" id="mDeposit" placeholder="0.00" />
-        </div>
-        <div class="row editable">
-          <label>Anzahlung fällig</label>
-          <input type="date" id="mDepositDue" />
-        </div>
-        <div class="row">
-          <label>Aufenthaltsabgabe</label>
-          <div class="calculated-value" id="mTouristTax">€0.00</div>
-        </div>
-        <div class="row">
-          <label>Gesamtpreis inkl.</label>
-          <div class="calculated-value" id="mTotalWithTax">€0.00</div>
-        </div>
-        <div class="row">
-          <label>Stornokosten</label>
-          <div class="warning-value" id="mCancellationFee">Kostenlos stornierbar</div>
-        </div>
-        <div class="row editable full-width">
-          <label>Notizen</label>
-          <textarea id="mNotes"></textarea>
         </div>
       </div>
+      
       <div class="modal-actions">
         <div class="modal-actions-left">
           <button class="btn danger" id="deleteBtn" style="display:none;">Löschen</button>
         </div>
         <div class="modal-actions-right">
+          <button class="btn" id="sendPaymentReminderBtn">💳 Anzahlungserinnerung</button>
+          <button class="btn" id="sendWelcomeEmailBtn">👋 Willkommensmail</button>
           <button class="btn" id="saveBtn">Speichern</button>
-          <button class="btn secondary" id="reminderBtn">Erinnerung senden</button>
-          <button class="btn ghost" id="tvbBtn">Bei TVB öffnen</button>
         </div>
       </div>
     </div>
   </div>
+
+  <!-- Email Detail Modal -->
+  <div class="overlay" id="emailOverlay">
+    <div class="modal">
+      <div class="modal-head">
+        <div class="modal-title" id="emailModalTitle">E-Mail</div>
+        <button class="btn ghost" id="emailModalClose">✕</button>
+      </div>
+      <div class="modal-body" style="padding:20px">
+        <div style="margin-bottom:16px">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Von</div>
+          <div style="font-weight:700" id="emailDetailFrom"></div>
+        </div>
+        <div style="margin-bottom:16px">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Betreff</div>
+          <div style="font-weight:600" id="emailDetailSubject"></div>
+        </div>
+        <div style="margin-bottom:16px">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Datum</div>
+          <div id="emailDetailDate"></div>
+        </div>
+        <div style="margin-bottom:16px">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Nachricht</div>
+          <div style="background:#f8fafc;padding:16px;border-radius:8px;white-space:pre-wrap;line-height:1.6" id="emailDetailBody"></div>
+        </div>
+        <div>
+          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:8px">
+            Buchung zuweisen
+          </label>
+          <select id="assignBookingSelect" style="width:100%;padding:8px;border-radius:8px;border:1px solid #e5e7eb">
+            <option value="">Keine Zuweisung</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <div class="modal-actions-right">
+          <button class="btn" id="assignEmailBtn">Zuweisen</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Email Compose Modal -->
+  <div class="overlay" id="composeOverlay">
+    <div class="modal">
+      <div class="modal-head">
+        <div class="modal-title" id="composeTitle">E-Mail senden</div>
+        <button class="btn ghost" id="composeClose">✕</button>
+      </div>
+      <div class="modal-body" style="padding:20px">
+        <div style="margin-bottom:16px">
+          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:8px">An</label>
+          <input type="email" id="composeTo" style="width:100%;padding:8px;border-radius:8px;border:1px solid #e5e7eb" />
+        </div>
+        <div style="margin-bottom:16px">
+          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:8px">Betreff</label>
+          <input type="text" id="composeSubject" style="width:100%;padding:8px;border-radius:8px;border:1px solid #e5e7eb" />
+        </div>
+        <div>
+          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:8px">Nachricht</label>
+          <textarea id="composeBody" style="width:100%;min-height:300px;padding:12px;border-radius:8px;border:1px solid #e5e7eb;font-family:inherit;line-height:1.6"></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <div class="modal-actions-right">
+          <button class="btn secondary" id="composeCancelBtn">Abbrechen</button>
+          <button class="btn" id="composeSendBtn">📤 Senden</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
 // ---- Data Storage ----
 let bookings = [];
+let emails = [];
 let currentBooking = null;
+let currentEmail = null;
 let isNewBooking = false;
+let isGmailConnected = false;
 
+// ---- API Helpers ----
 async function loadBookings() {
   try {
     const res = await fetch('/api/bookings');
     if (!res.ok) throw new Error('Failed to fetch bookings');
-    const apiBookings = await res.json();
-    bookings = apiBookings;
-    console.log('Loaded bookings from API:', bookings);
+    bookings = await res.json();
+    console.log('Loaded bookings:', bookings.length);
   } catch (e) {
-    console.error('❌ Could not load bookings from API:', e);
-    // Keep existing local bookings if API fails
-    if (bookings.length === 0) {
-      // Demo data for testing only on first load
-      bookings = [
-        {
-          id: '1',
-          guest: 'Familie Müller',
-          status: 'confirm',
-          start: '2025-11-15',
-          end: '2025-11-20',
-          email: 'mueller@example.com',
-          phone: '+43 123 456789',
-          address: 'Musterstraße 1\n1010 Wien',
-          adults: 2,
-          children: 1,
-          amount: '800',
-          depositAmount: '200',
-          depositDue: '2025-11-01',
-          notes: 'Frühanreise gewünscht'
-        },
-        {
-          id: '2',
-          guest: 'Herr Schmidt',
-          status: 'pending',
-          start: '2025-11-25',
-          end: '2025-11-28',
-          email: 'schmidt@example.com',
-          phone: '+49 987 654321',
-          address: 'Hauptstraße 10\n80331 München',
-          adults: 1,
-          children: 0,
-          amount: '450',
-          depositAmount: '150',
-          depositDue: '2025-11-10',
-          notes: ''
-        }
-      ];
-    }
-    console.log('Using local bookings:', bookings);
+    console.error('❌ Could not load bookings:', e);
+    bookings = [
+      {
+        id: '1',
+        guest: 'Familie Müller',
+        status: 'confirm',
+        start: '2025-11-15',
+        end: '2025-11-20',
+        email: 'mueller@example.com',
+        phone: '+43 123 456789',
+        address: 'Musterstraße 1\n1010 Wien',
+        adults: 2,
+        children: 1,
+        amount: '800',
+        depositAmount: '200',
+        depositDue: '2025-11-01',
+        notes: 'Frühanreise gewünscht'
+      }
+    ];
   }
 }
 
 async function saveBooking(booking) {
-  // Make sure we have an ID
   if (!booking.id) {
     booking.id = 'booking_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
   }
   
-  console.log('💾 Attempting to save booking:', booking.guest, 'ID:', booking.id);
-
   try {
     const res = await fetch('/api/bookings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(booking)
     });
-    
-    if (!res.ok) {
-      throw new Error(`API error: ${res.status}`);
-    }
-    
-    const result = await res.json();
-    console.log('✅ Booking saved via API:', result);
-    
-    // Wait a moment for DB to sync
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Reload bookings from API
+    if (!res.ok) throw new Error(`API error: ${res.status}`);
     await loadBookings();
-    
-    // Check if the booking was actually loaded
-    const foundBooking = bookings.find(b => b.id === booking.id);
-    if (!foundBooking) {
-      console.warn('⚠️ Saved booking not found in API response! Adding locally as fallback.');
+    buildMonth(view);
+    updateNextAppointment();
+    return true;
+  } catch (err) {
+    console.error('❌ Error saving:', err);
+    if (isNewBooking) {
       bookings.push({ ...booking });
     } else {
-      console.log('✅ Confirmed booking in API response:', foundBooking.guest);
-    }
-  } catch (err) {
-    console.error('❌ API not available, saving locally:', err);
-    
-    // Save locally - create a clean copy
-    const cleanBooking = { ...booking };
-    
-    if (isNewBooking) {
-      bookings.push(cleanBooking);
-      console.log('✅ Added new booking locally:', cleanBooking.guest);
-    } else {
       const idx = bookings.findIndex(b => b.id === booking.id);
-      if (idx !== -1) {
-        bookings[idx] = cleanBooking;
-        console.log('✅ Updated booking locally at index', idx);
-      } else {
-        console.warn('Could not find booking to update, adding as new');
-        bookings.push(cleanBooking);
-      }
+      if (idx !== -1) bookings[idx] = { ...booking };
     }
+    buildMonth(view);
+    return true;
   }
-  
-  console.log('📊 Total bookings after save:', bookings.length);
-  
-  // Always rebuild calendar and update widget
-  buildMonth(view);
-  updateNextAppointment();
-  return true;
 }
+
 async function deleteBooking(bookingId) {
   try {
     const res = await fetch('/api/bookings', {
@@ -483,404 +667,56 @@ async function deleteBooking(bookingId) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: bookingId })
     });
-    if (!res.ok) throw new Error('Failed to delete booking');
-    console.log('✅ Booking deleted:', bookingId);
+    if (!res.ok) throw new Error('Failed to delete');
     await loadBookings();
     buildMonth(view);
     updateNextAppointment();
     return true;
   } catch (err) {
-    console.error('❌ Error deleting booking:', err);
-    // For demo: remove from local array
     bookings = bookings.filter(b => b.id !== bookingId);
     buildMonth(view);
-    updateNextAppointment();
     return true;
   }
 }
 
-// ---- Helpers ----
-function pad(n) { return n < 10 ? ('0' + n) : '' + n; }
-function iso(d) { return d.toISOString().slice(0, 10); }
-function formatDateEU(dateStr) {
-  if (!dateStr) return '';
-  const [y, m, d] = dateStr.split('-');
-  return `${d}.${m}.${y}`;
-}
-
-// Track used colors to avoid repeats
-let lastUsedColors = [];
-
-// Generate a unique color for each booking based on guest name
-function getBookingColor(guestName) {
-  const colors = [
-    '#3b82f6', // blue
-    '#8b5cf6', // purple
-    '#ec4899', // pink
-    '#06b6d4', // cyan
-    '#6366f1', // indigo
-    '#14b8a6', // teal
-    '#a855f7', // violet
-    '#0ea5e9', // sky blue
-    '#d946ef', // fuchsia
-  ];
-  
-  // Simple hash function to get consistent color for same guest
-  let hash = 0;
-  for (let i = 0; i < guestName.length; i++) {
-    hash = guestName.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  
-  let selectedColor = colors[Math.abs(hash) % colors.length];
-  
-  // If this color was just used, try the next one
-  if (lastUsedColors.includes(selectedColor)) {
-    const currentIndex = colors.indexOf(selectedColor);
-    selectedColor = colors[(currentIndex + 1) % colors.length];
-  }
-  
-  // Keep track of last 3 colors used
-  lastUsedColors.push(selectedColor);
-  if (lastUsedColors.length > 3) {
-    lastUsedColors.shift();
-  }
-  
-  return selectedColor;
-}
-
-function calculateNights(startISO, endISO) {
-  if (!startISO || !endISO) return 0;
-  const start = new Date(startISO);
-  const end = new Date(endISO);
-  const diff = end - start;
-  return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
-}
-
-function calculateTouristTax(nights, adults) {
-  return nights * adults * 5;
-}
-
-function updateCalculations() {
-  const start = document.getElementById('mStart').value;
-  const end = document.getElementById('mEnd').value;
-  const adults = parseInt(document.getElementById('mAdults').value) || 0;
-  const amount = parseFloat(document.getElementById('mAmount').value) || 0;
-
-  const nights = calculateNights(start, end);
-  const touristTax = calculateTouristTax(nights, adults);
-  document.getElementById('mTouristTax').textContent = `€${touristTax.toFixed(2)} (${nights} Nächte × ${adults} Erwachsene × €5)`;
-
-  const totalWithTax = amount + touristTax;
-  document.getElementById('mTotalWithTax').textContent = `€${totalWithTax.toFixed(2)}`;
-}
-
-// ---- Calendar ----
-let view = new Date();
-
-function buildMonth(date) {
-  const calGrid = document.getElementById('calGrid');
-  const calTitle = document.getElementById('calTitle');
-  if (!calGrid) return;
-
-  console.log('Building calendar for', date, 'with', bookings.length, 'bookings');
-
-  calGrid.innerHTML = '';
-  const y = date.getFullYear();
-  const m = date.getMonth();
-  const first = new Date(y, m, 1);
-  const startOffset = (first.getDay() + 6) % 7;
-  const daysInMonth = new Date(y, m + 1, 0).getDate();
-
-  calTitle.textContent = first.toLocaleDateString('de-AT', { month: 'long', year: 'numeric' });
-
-  // Add day of week headers
-  const dows = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
-  dows.forEach(txt => {
-    const el = document.createElement('div');
-    el.className = 'dow';
-    el.textContent = txt;
-    calGrid.appendChild(el);
-  });
-
-  for (let i = 0; i < startOffset; i++) {
-    const empty = document.createElement('div');
-    empty.className = 'cell';
-    calGrid.appendChild(empty);
-  }
-
-  for (let d = 1; d <= daysInMonth; d++) {
-    const cell = document.createElement('div');
-    cell.className = 'cell';
-    const dateLabel = document.createElement('span');
-    dateLabel.className = 'date';
-    dateLabel.textContent = d;
-    cell.appendChild(dateLabel);
-    cell.dataset.date = `${y}-${pad(m + 1)}-${pad(d)}`;
-    calGrid.appendChild(cell);
-  }
-
-  const cellByDate = {};
-  document.querySelectorAll('.cell[data-date]').forEach(c => {
-    cellByDate[c.dataset.date] = c;
-  });
-
-  function eachDate(fromISO, toISO) {
-    const out = [];
-    let d = new Date(fromISO + 'T00:00:00');
-    const end = new Date(toISO + 'T00:00:00');
-    while (d <= end) {
-      out.push(iso(d));
-      d.setDate(d.getDate() + 1);
-    }
-    return out;
-  }
-
-bookings.forEach(b => {
-  console.log('Processing booking:', b.guest, 'from', b.start, 'to', b.end);
-  const dates = eachDate(b.start, b.end);
-  console.log('Dates for this booking:', dates);
-  const bookingColor = getBookingColor(b.guest);
-  dates.forEach((dayIso) => {
-    const cell = cellByDate[dayIso];
-    if (!cell) {
-      console.log('Cell not found for date:', dayIso);
+async function loadEmails() {
+  try {
+    const res = await fetch('/api/gmail/fetch');
+    if (res.status === 401) {
+      isGmailConnected = false;
+      document.getElementById('authBanner').style.display = 'flex';
       return;
     }
-    const seg = document.createElement('div');
-    seg.className = 'seg ' + (b.status === 'confirm' ? 'confirm' : 'pending');
-    seg.style.backgroundColor = bookingColor;
-    seg.innerHTML = `${b.guest}`;
-    seg.addEventListener('click', () => openModal(b));
-    cell.appendChild(seg);
-    console.log('Added segment for', b.guest, 'on', dayIso);
-  });
-});
-  
-  console.log('Calendar built successfully');
-}
-
-// ---- Modal ----
-function openModal(b) {
-  currentBooking = b;
-  isNewBooking = false;
-  const overlay = document.getElementById('overlay');
-  overlay.style.display = 'flex';
-  
-  document.getElementById('mTitle').textContent = b.guest || 'Buchung';
-  document.getElementById('mGuest').value = b.guest || '';
-  
-  const statusSelect = document.getElementById('mStatus');
-  statusSelect.value = b.status || 'pending';
-  statusSelect.className = (b.status === 'confirm') ? 'status-confirm' : 'status-pending';
-  
-  document.getElementById('mStart').value = b.start || '';
-  document.getElementById('mEnd').value = b.end || '';
-  document.getElementById('mEmail').value = b.email || '';
-  document.getElementById('mPhone').value = b.phone || '';
-  document.getElementById('mAddress').value = b.address || '';
-  document.getElementById('mAdults').value = b.adults || 2;
-  document.getElementById('mChildren').value = b.children || 0;
-  document.getElementById('mAmount').value = b.amount || '';
-  document.getElementById('mDeposit').value = b.depositAmount || '';
-  document.getElementById('mDepositDue').value = b.depositDue || '';
-  document.getElementById('mNotes').value = b.notes || '';
-
-  // Show delete button for existing bookings
-  document.getElementById('deleteBtn').style.display = b.id ? 'inline-flex' : 'none';
-
-  updateCalculations();
-}
-
-function openNewBookingModal() {
-  currentBooking = null;
-  isNewBooking = true;
-  const overlay = document.getElementById('overlay');
-  overlay.style.display = 'flex';
-  
-  // Clear all fields
-  document.getElementById('mTitle').textContent = 'Neue Buchung';
-  document.getElementById('mGuest').value = '';
-  
-  const statusSelect = document.getElementById('mStatus');
-  statusSelect.value = 'pending';
-  statusSelect.className = 'status-pending';
-  
-  document.getElementById('mStart').value = '';
-  document.getElementById('mEnd').value = '';
-  document.getElementById('mEmail').value = '';
-  document.getElementById('mPhone').value = '';
-  document.getElementById('mAddress').value = '';
-  document.getElementById('mAdults').value = '2';
-  document.getElementById('mChildren').value = '0';
-  document.getElementById('mAmount').value = '';
-  document.getElementById('mDeposit').value = '';
-  document.getElementById('mDepositDue').value = '';
-  document.getElementById('mNotes').value = '';
-
-  // Hide delete button for new bookings
-  document.getElementById('deleteBtn').style.display = 'none';
-
-  updateCalculations();
-}
-
-function closeModal() {
-  document.getElementById('overlay').style.display = 'none';
-  currentBooking = null;
-  isNewBooking = false;
-}
-
-// ---- Update next appointment widget ----
-function updateNextAppointment() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  const upcoming = bookings
-    .filter(b => {
-      const start = new Date(b.start);
-      start.setHours(0, 0, 0, 0);
-      return start >= today;
-    })
-    .sort((a, b) => new Date(a.start) - new Date(b.start));
-  
-  const widget = document.getElementById('nextAppointment');
-  
-  if (!widget) return;
-  
-  if (upcoming.length > 0) {
-    const next = upcoming[0];
-    const startDate = new Date(next.start);
-    const isToday = startDate.getTime() === today.getTime();
+    if (!res.ok) throw new Error('Failed to fetch emails');
     
-    widget.innerHTML = `
-      <div>
-        <div style="color:var(--muted);font-size:14px">${next.guest} — ${isToday ? 'Heute' : formatDateEU(next.start)} Anreise</div>
-      </div>
-      <span class="tag ${next.status}">${next.status === 'confirm' ? 'BESTÄTIGT' : 'AUSSTEHEND'}</span>
-    `;
-    
-    // Make widget clickable to jump to this booking's month
-    widget.style.cursor = 'pointer';
-    widget.onclick = () => {
-      const bookingDate = new Date(next.start);
-      view = new Date(bookingDate.getFullYear(), bookingDate.getMonth(), 1);
-      buildMonth(view);
-    };
-  } else {
-    widget.innerHTML = `
-      <div>
-        <div style="color:var(--muted);font-size:14px">Keine bevorstehenden Buchungen</div>
-      </div>
-      <span class="tag confirm">—</span>
-    `;
-    widget.style.cursor = 'default';
-    widget.onclick = null;
+    emails = await res.json();
+    isGmailConnected = true;
+    document.getElementById('authBanner').style.display = 'none';
+    displayEmails();
+  } catch (e) {
+    console.error('❌ Could not load emails:', e);
+    isGmailConnected = false;
+    document.getElementById('authBanner').style.display = 'flex';
   }
 }
-// ---- Event Listeners ----
-document.getElementById('mClose').addEventListener('click', closeModal);
-document.getElementById('overlay').addEventListener('click', e => {
-  if (e.target.id === 'overlay') closeModal();
-});
 
-document.getElementById('prevBtn').addEventListener('click', () => {
-  view.setMonth(view.getMonth() - 1);
-  buildMonth(view);
-});
-
-document.getElementById('nextBtn').addEventListener('click', () => {
-  view.setMonth(view.getMonth() + 1);
-  buildMonth(view);
-});
-
-document.getElementById('todayBtn').addEventListener('click', () => {
-  view = new Date();
-  buildMonth(view);
-});
-
-// Add Booking Button
-document.getElementById('addBookingBtn').addEventListener('click', () => {
-  openNewBookingModal();
-});
-
-// Save Button
-document.getElementById('saveBtn').addEventListener('click', async () => {
-  const bookingData = {
-    guest: document.getElementById('mGuest').value,
-    status: document.getElementById('mStatus').value,
-    email: document.getElementById('mEmail').value,
-    phone: document.getElementById('mPhone').value,
-    address: document.getElementById('mAddress').value,
-    start: document.getElementById('mStart').value,
-    end: document.getElementById('mEnd').value,
-    adults: parseInt(document.getElementById('mAdults').value) || 2,
-    children: parseInt(document.getElementById('mChildren').value) || 0,
-    amount: document.getElementById('mAmount').value,
-    depositAmount: document.getElementById('mDeposit').value,
-    depositDue: document.getElementById('mDepositDue').value,
-    notes: document.getElementById('mNotes').value
-  };
-
-  // Validation
-  if (!bookingData.guest) {
-    alert('Bitte Gastnamen eingeben');
-    return;
+async function assignEmailToBooking(emailId, bookingId) {
+  try {
+    const res = await fetch('/api/emails/assign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emailId, bookingId })
+    });
+    if (!res.ok) throw new Error('Failed to assign');
+    await loadEmails();
+    return true;
+  } catch (err) {
+    console.error('❌ Error assigning email:', err);
+    return false;
   }
-  if (!bookingData.start || !bookingData.end) {
-    alert('Bitte Start- und Enddatum eingeben');
-    return;
-  }
+}
 
-  // Generate ID BEFORE saving if it's a new booking
-  if (isNewBooking) {
-    bookingData.id = 'booking_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-  } else if (currentBooking && currentBooking.id) {
-    bookingData.id = currentBooking.id;
-  }
-
-  console.log('Saving booking:', bookingData);
-  console.log('Is new booking:', isNewBooking);
-  console.log('Booking ID:', bookingData.id);
-
-  const success = await saveBooking(bookingData);
-  if (success) {
-    alert('✅ Buchung gespeichert!');
-    closeModal();
-  } else {
-    alert('❌ Fehler beim Speichern');
-  }
-});
-
-// Update status select color on change
-document.getElementById('mStatus').addEventListener('change', function() {
-  this.className = this.value === 'confirm' ? 'status-confirm' : 'status-pending';
-});
-
-// Delete Button
-document.getElementById('deleteBtn').addEventListener('click', async () => {
-  if (!currentBooking || !currentBooking.id) return;
-
-  const confirmDelete = confirm(`Möchten Sie die Buchung von ${currentBooking.guest} wirklich löschen?`);
-  if (!confirmDelete) return;
-
-  const success = await deleteBooking(currentBooking.id);
-  if (success) {
-    alert('✅ Buchung gelöscht!');
-    closeModal();
-  } else {
-    alert('❌ Fehler beim Löschen');
-  }
-});
-
-// Auto-recalculate on input change
-['mStart', 'mEnd', 'mAdults', 'mAmount'].forEach(id => {
-  document.getElementById(id).addEventListener('input', updateCalculations);
-});
-
-// Startup
-loadBookings().then(() => {
-  buildMonth(view);
-  updateNextAppointment();
-});
-  </script>
-</body>
-</html>
+async function sendEmail(to, subject, body) {
+  try {
+    const res = await fetch('/api/gmail/send', {
+      method: 'POST',
