@@ -774,7 +774,8 @@ function getBookingColor(guestName) {
   return colors[Math.abs(hash) % colors.length];
 }
 
-// ---- Email Display ----
+
+// Replace your displayEmails() function with this:
 function displayEmails() {
   const emailList = document.getElementById('emailList');
   const emailCount = document.getElementById('emailCount');
@@ -794,11 +795,11 @@ function displayEmails() {
     
     return `
       <div class="email-item ${assigned}" data-email-id="${email.id}">
-        <div class="email-from">${email.from_name || email.from_email}</div>
+        <div class="email-from">${email.from || 'Unbekannt'}</div>
         <div class="email-subject">${email.subject || '(Kein Betreff)'}</div>
-        <div class="email-snippet">${email.snippet || ''}</div>
+        <div class="email-snippet">${email.body || ''}</div>
         <div class="email-meta">
-          <span class="email-date">${formatDateTime(email.date)}</span>
+          <span class="email-date">${email.date || ''}</span>
           ${badge}
         </div>
       </div>
@@ -814,12 +815,13 @@ function displayEmails() {
   });
 }
 
+// Also fix openEmailModal():
 function openEmailModal(email) {
   currentEmail = email;
-  document.getElementById('emailDetailFrom').textContent = `${email.from_name || ''} <${email.from_email}>`;
+  document.getElementById('emailDetailFrom').textContent = email.from || 'Unbekannt';
   document.getElementById('emailDetailSubject').textContent = email.subject || '(Kein Betreff)';
-  document.getElementById('emailDetailDate').textContent = formatDateTime(email.date);
-  document.getElementById('emailDetailBody').textContent = email.body || email.snippet || '';
+  document.getElementById('emailDetailDate').textContent = email.date || '';
+  document.getElementById('emailDetailBody').textContent = email.body || '';
   
   const select = document.getElementById('assignBookingSelect');
   select.innerHTML = '<option value="">Keine Zuweisung</option>' + 
@@ -827,6 +829,7 @@ function openEmailModal(email) {
   
   document.getElementById('emailOverlay').style.display = 'flex';
 }
+
 
 function closeEmailModal() {
   document.getElementById('emailOverlay').style.display = 'none';
@@ -1071,7 +1074,7 @@ function updateBookingEmails() {
     container.innerHTML = bookingEmailsList.map(email => `
       <div class="booking-email-item">
         <div class="booking-email-subject">${email.subject || '(Kein Betreff)'}</div>
-        <div class="booking-email-date">${formatDateTime(email.date)} - ${email.from_name || email.from_email}</div>
+        <div class="booking-email-date">${email.date || ''} - ${email.from || 'Unbekannt'}</div>
       </div>
     `).join('');
   }
