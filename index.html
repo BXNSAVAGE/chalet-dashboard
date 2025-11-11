@@ -435,34 +435,33 @@ async function saveBooking(booking) {
     const result = await res.json();
     console.log('✅ Booking saved via API:', result);
     await loadBookings();
-    buildMonth(view);
-    updateNextAppointment();
-    return true;
   } catch (err) {
     console.error('❌ API not available, saving locally:', err);
     
-    // Save locally
+    // Save locally - create a clean copy
+    const cleanBooking = { ...booking };
+    
     if (isNewBooking) {
-      bookings.push(booking);
-      console.log('✅ Added new booking locally:', booking);
+      bookings.push(cleanBooking);
+      console.log('✅ Added new booking locally:', cleanBooking);
     } else {
       const idx = bookings.findIndex(b => b.id === booking.id);
       if (idx !== -1) {
-        bookings[idx] = booking;
-        console.log('✅ Updated booking locally:', booking);
+        bookings[idx] = cleanBooking;
+        console.log('✅ Updated booking locally at index', idx, ':', cleanBooking);
       } else {
         console.warn('Could not find booking to update, adding as new');
-        bookings.push(booking);
+        bookings.push(cleanBooking);
       }
     }
-    
-    console.log('All bookings after save:', bookings);
-    
-    // Force rebuild calendar
-    buildMonth(view);
-    updateNextAppointment();
-    return true;
   }
+  
+  console.log('All bookings after save:', JSON.stringify(bookings, null, 2));
+  
+  // Always rebuild calendar and update widget
+  buildMonth(view);
+  updateNextAppointment();
+  return true;
 }
 
 async function deleteBooking(bookingId) {
