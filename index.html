@@ -365,45 +365,50 @@ async function loadBookings() {
   try {
     const res = await fetch('/api/bookings');
     if (!res.ok) throw new Error('Failed to fetch bookings');
-    bookings = await res.json();
-    console.log('Loaded bookings:', bookings);
+    const apiBookings = await res.json();
+    bookings = apiBookings;
+    console.log('Loaded bookings from API:', bookings);
   } catch (e) {
-    console.error('❌ Could not load bookings:', e);
-    // Demo data for testing
-    bookings = [
-      {
-        id: '1',
-        guest: 'Familie Müller',
-        status: 'confirm',
-        start: '2025-11-15',
-        end: '2025-11-20',
-        email: 'mueller@example.com',
-        phone: '+43 123 456789',
-        address: 'Musterstraße 1\n1010 Wien',
-        adults: 2,
-        children: 1,
-        amount: '800',
-        depositAmount: '200',
-        depositDue: '2025-11-01',
-        notes: 'Frühanreise gewünscht'
-      },
-      {
-        id: '2',
-        guest: 'Herr Schmidt',
-        status: 'pending',
-        start: '2025-11-25',
-        end: '2025-11-28',
-        email: 'schmidt@example.com',
-        phone: '+49 987 654321',
-        address: 'Hauptstraße 10\n80331 München',
-        adults: 1,
-        children: 0,
-        amount: '450',
-        depositAmount: '150',
-        depositDue: '2025-11-10',
-        notes: ''
-      }
-    ];
+    console.error('❌ Could not load bookings from API:', e);
+    // Keep existing local bookings if API fails
+    if (bookings.length === 0) {
+      // Demo data for testing only on first load
+      bookings = [
+        {
+          id: '1',
+          guest: 'Familie Müller',
+          status: 'confirm',
+          start: '2025-11-15',
+          end: '2025-11-20',
+          email: 'mueller@example.com',
+          phone: '+43 123 456789',
+          address: 'Musterstraße 1\n1010 Wien',
+          adults: 2,
+          children: 1,
+          amount: '800',
+          depositAmount: '200',
+          depositDue: '2025-11-01',
+          notes: 'Frühanreise gewünscht'
+        },
+        {
+          id: '2',
+          guest: 'Herr Schmidt',
+          status: 'pending',
+          start: '2025-11-25',
+          end: '2025-11-28',
+          email: 'schmidt@example.com',
+          phone: '+49 987 654321',
+          address: 'Hauptstraße 10\n80331 München',
+          adults: 1,
+          children: 0,
+          amount: '450',
+          depositAmount: '150',
+          depositDue: '2025-11-10',
+          notes: ''
+        }
+      ];
+    }
+    console.log('Using local bookings:', bookings);
   }
 }
 
@@ -413,6 +418,8 @@ async function saveBooking(booking) {
     booking.id = 'booking_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     console.log('Generated ID in saveBooking:', booking.id);
   }
+
+  console.log('Attempting to save booking:', booking);
 
   try {
     const res = await fetch('/api/bookings', {
@@ -432,19 +439,26 @@ async function saveBooking(booking) {
     updateNextAppointment();
     return true;
   } catch (err) {
-    console.error('❌ API not available, using local storage:', err);
-    // For demo: add to local array
+    console.error('❌ API not available, saving locally:', err);
+    
+    // Save locally
     if (isNewBooking) {
       bookings.push(booking);
-      console.log('Added new booking locally:', booking);
+      console.log('✅ Added new booking locally:', booking);
     } else {
       const idx = bookings.findIndex(b => b.id === booking.id);
       if (idx !== -1) {
         bookings[idx] = booking;
-        console.log('Updated booking locally:', booking);
+        console.log('✅ Updated booking locally:', booking);
+      } else {
+        console.warn('Could not find booking to update, adding as new');
+        bookings.push(booking);
       }
     }
-    console.log('Current bookings:', bookings);
+    
+    console.log('All bookings after save:', bookings);
+    
+    // Force rebuild calendar
     buildMonth(view);
     updateNextAppointment();
     return true;
@@ -515,6 +529,8 @@ function buildMonth(date) {
   const calTitle = document.getElementById('calTitle');
   if (!calGrid) return;
 
+  console.log('Building calendar for', date, 'with', bookings.length, 'bookings');
+
   calGrid.innerHTML = '';
   const y = date.getFullYear();
   const m = date.getMonth();
@@ -567,17 +583,25 @@ function buildMonth(date) {
   }
 
   bookings.forEach(b => {
+    console.log('Processing booking:', b.guest, 'from', b.start, 'to', b.end);
     const dates = eachDate(b.start, b.end);
+    console.log('Dates for this booking:', dates);
     dates.forEach((dayIso) => {
       const cell = cellByDate[dayIso];
-      if (!cell) return;
+      if (!cell) {
+        console.log('Cell not found for date:', dayIso);
+        return;
+      }
       const seg = document.createElement('div');
       seg.className = 'seg ' + (b.status === 'confirm' ? 'confirm' : 'pending');
       seg.innerHTML = `${b.guest}`;
       seg.addEventListener('click', () => openModal(b));
       cell.appendChild(seg);
+      console.log('Added segment for', b.guest, 'on', dayIso);
     });
   });
+  
+  console.log('Calendar built successfully');
 }
 
 // ---- Modal ----
