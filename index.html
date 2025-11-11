@@ -367,7 +367,7 @@ async function loadBookings() {
     if (!res.ok) throw new Error('Failed to fetch bookings');
     const apiBookings = await res.json();
     bookings = apiBookings;
-    console.log('Loaded bookings from API:', bookings);
+    console.log('📥 Loaded bookings from API:', bookings.length, 'bookings');
   } catch (e) {
     console.error('❌ Could not load bookings from API:', e);
     // Keep existing local bookings if API fails
@@ -408,7 +408,7 @@ async function loadBookings() {
         }
       ];
     }
-    console.log('Using local bookings:', bookings);
+    console.log('Using local bookings:', bookings.length, 'bookings');
   }
 }
 
@@ -435,7 +435,7 @@ async function saveBooking(booking) {
     console.log('✅ Booking saved via API:', result);
     
     // Wait a moment for DB to sync
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(resolve => setTimeout(resolve, 300));
     
     // Reload bookings from API
     await loadBookings();
@@ -476,180 +476,40 @@ async function saveBooking(booking) {
   updateNextAppointment();
   return true;
 }
-export async function onRequest(context) {
-  const { request, env } = context;
-  const db = env.DB;
-  const url = new URL(request.url);
 
-  // --- GET: Fetch all bookings ---
-  if (request.method === 'GET') {
-    try {
-      const { results } = await db.prepare('SELECT * FROM bookings').all();
-      return new Response(JSON.stringify(results), {
-        headers: { 'Content-Type': 'application/json' },
-      });
-    } catch (err) {
-      console.error('❌ DB fetch failed', err);
-      return new Response(JSON.stringify({ error: 'DB error' }), { status: 500 });
+async function deleteBooking(bookingId) {
+  try {
+    console.log('🗑️ Attempting to delete booking:', bookingId);
+    
+    const res = await fetch('/api/bookings', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: bookingId })
+    });
+    
+    if (!res.ok) {
+      const errorData = await res.json();
+      throw new Error(`Failed to delete booking: ${errorData.error || res.status}`);
     }
+    
+    const result = await res.json();
+    console.log('✅ Booking deleted:', result);
+    
+    // Wait a moment for DB to sync
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    await loadBookings();
+    buildMonth(view);
+    updateNextAppointment();
+    return true;
+  } catch (err) {
+    console.error('❌ Error deleting booking:', err);
+    // For demo: remove from local array as fallback
+    bookings = bookings.filter(b => b.id !== bookingId);
+    buildMonth(view);
+    updateNextAppointment();
+    return false;
   }
-
-  // --- POST: Add a new booking ---
-  if (request.method === 'POST') {
-    try {
-      const body = await request.json();
-      if (!body.id) body.id = crypto.randomUUID();
-
-      await db
-        .prepare(
-          `INSERT INTO bookings (
-            id, guest, email, phone, address, status, start, end, 
-            adults, children, amount, depositAmount, depositDue, 
-            cancellationPolicy, freeCancellation, notes
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        )
-        .bind(
-          body.id,
-          body.guest || '',
-          body.email || '',
-          body.phone || '',
-          body.address || '',
-          body.status || 'pending',
-          body.start || '',
-          body.end || '',
-          body.adults || 2,
-          body.children || 0,
-          body.amount || '',
-          body.depositAmount || '',
-          body.depositDue || '',
-          body.cancellationPolicy || '[]',
-          body.freeCancellation || 'false',
-          body.notes || ''
-        )
-        .run();
-
-      return new Response(
-        JSON.stringify({ ok: true, id: body.id }),
-        { headers: { 'Content-Type': 'application/json' } }
-      );
-    } catch (err) {
-      console.error('❌ DB insert failed', err);
-      return new Response(JSON.stringify({ error: 'Insert failed', details: err.message }), { status: 500 });
-    }
-  }
-
-  // --- PUT: Create OR Update a booking (upsert) ---
-  if (request.method === 'PUT') {
-    try {
-      const body = await request.json();
-      if (!body.id) body.id = crypto.randomUUID();
-
-      // Check if booking exists
-      const existing = await db
-        .prepare('SELECT id FROM bookings WHERE id = ?')
-        .bind(body.id)
-        .first();
-
-      if (existing) {
-        // Update existing booking
-        await db
-          .prepare(
-            `UPDATE bookings SET 
-              guest=?, email=?, phone=?, address=?, status=?, start=?, end=?,
-              adults=?, children=?, amount=?, depositAmount=?, depositDue=?,
-              cancellationPolicy=?, freeCancellation=?, notes=?
-            WHERE id=?`
-          )
-          .bind(
-            body.guest || '',
-            body.email || '',
-            body.phone || '',
-            body.address || '',
-            body.status || 'pending',
-            body.start || '',
-            body.end || '',
-            body.adults || 2,
-            body.children || 0,
-            body.amount || '',
-            body.depositAmount || '',
-            body.depositDue || '',
-            body.cancellationPolicy || '[]',
-            body.freeCancellation || 'false',
-            body.notes || '',
-            body.id
-          )
-          .run();
-      } else {
-        // Insert new booking
-        await db
-          .prepare(
-            `INSERT INTO bookings (
-              id, guest, email, phone, address, status, start, end, 
-              adults, children, amount, depositAmount, depositDue, 
-              cancellationPolicy, freeCancellation, notes
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-          )
-          .bind(
-            body.id,
-            body.guest || '',
-            body.email || '',
-            body.phone || '',
-            body.address || '',
-            body.status || 'pending',
-            body.start || '',
-            body.end || '',
-            body.adults || 2,
-            body.children || 0,
-            body.amount || '',
-            body.depositAmount || '',
-            body.depositDue || '',
-            body.cancellationPolicy || '[]',
-            body.freeCancellation || 'false',
-            body.notes || ''
-          )
-          .run();
-      }
-
-      return new Response(
-        JSON.stringify({ ok: true, id: body.id }),
-        { headers: { 'Content-Type': 'application/json' } }
-      );
-    } catch (err) {
-      console.error('❌ DB upsert failed', err);
-      return new Response(JSON.stringify({ error: 'Upsert failed', details: err.message }), { status: 500 });
-    }
-  }
-
-  // --- DELETE: Remove a booking ---
-  if (request.method === 'DELETE') {
-    try {
-      const body = await request.json();
-      const bookingId = body.id;
-
-      if (!bookingId) {
-        return new Response(JSON.stringify({ error: 'Missing booking ID' }), { status: 400 });
-      }
-
-      console.log('🗑️ Deleting booking:', bookingId);
-
-      const result = await db
-        .prepare('DELETE FROM bookings WHERE id = ?')
-        .bind(bookingId)
-        .run();
-
-      console.log('Delete result:', result);
-
-      return new Response(
-        JSON.stringify({ ok: true, id: bookingId, deleted: true, changes: result.changes }),
-        { headers: { 'Content-Type': 'application/json' } }
-      );
-    } catch (err) {
-      console.error('❌ DB delete failed', err);
-      return new Response(JSON.stringify({ error: 'Delete failed', details: err.message }), { status: 500 });
-    }
-  }
-
-  return new Response('Method Not Allowed', { status: 405 });
 }
 
 // ---- Helpers ----
@@ -695,7 +555,7 @@ function buildMonth(date) {
   const calTitle = document.getElementById('calTitle');
   if (!calGrid) return;
 
-  console.log('Building calendar for', date, 'with', bookings.length, 'bookings');
+  console.log('📅 Building calendar for', date.toLocaleDateString('de-AT'), 'with', bookings.length, 'bookings');
 
   calGrid.innerHTML = '';
   const y = date.getFullYear();
@@ -749,25 +609,19 @@ function buildMonth(date) {
   }
 
   bookings.forEach(b => {
-    console.log('Processing booking:', b.guest, 'from', b.start, 'to', b.end);
     const dates = eachDate(b.start, b.end);
-    console.log('Dates for this booking:', dates);
     dates.forEach((dayIso) => {
       const cell = cellByDate[dayIso];
-      if (!cell) {
-        console.log('Cell not found for date:', dayIso);
-        return;
-      }
+      if (!cell) return;
       const seg = document.createElement('div');
       seg.className = 'seg ' + (b.status === 'confirm' ? 'confirm' : 'pending');
       seg.innerHTML = `${b.guest}`;
       seg.addEventListener('click', () => openModal(b));
       cell.appendChild(seg);
-      console.log('Added segment for', b.guest, 'on', dayIso);
     });
   });
   
-  console.log('Calendar built successfully');
+  console.log('✅ Calendar built successfully');
 }
 
 // ---- Modal ----
@@ -983,6 +837,3 @@ loadBookings().then(() => {
   buildMonth(view);
   updateNextAppointment();
 });
-  </script>
-</body>
-</html>
