@@ -54,10 +54,11 @@ export async function onRequest(context) {
       return new Response('Gmail API error: ' + err, { status: gmailRes.status });
     }
 
-    const data = await gmailRes.json();
-    return new Response(JSON.stringify(data, null, 2), {
-      headers: { 'Content-Type': 'application/json' }
-    });
+const data = await gmailRes.json();
+return new Response(JSON.stringify(data.messages || []), {
+  headers: { 'Content-Type': 'application/json' }
+});
+
 
   } catch (err) {
     return new Response('Server error: ' + err.stack, { status: 500 });
