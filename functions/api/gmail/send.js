@@ -48,15 +48,19 @@ export async function onRequest(context) {
       }
     }
 
+    // Get the "from" address (optional, defaults to primary account)
+    const from = env.GMAIL_SEND_FROM || ''; // Set this in your environment variables
+
     // Create email in RFC 2822 format
     const emailLines = [
+      from ? `From: ${from}` : null,
       `To: ${to}`,
       `Subject: ${subject}`,
       'Content-Type: text/plain; charset=utf-8',
       'MIME-Version: 1.0',
       '',
       body
-    ];
+    ].filter(Boolean); // Remove null values
     const email = emailLines.join('\r\n');
 
     // Encode to base64url
