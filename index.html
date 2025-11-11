@@ -1,598 +1,767 @@
 <!doctype html>
 <html lang="de">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Chalet Dashboard — Gmail Integration</title>
-  <style>
-    :root {
-      --bg:#f7f7f9; --glass:#ffffffcc; --text:#0b0c0f; --muted:#6b7280;
-      --accent:#0a84ff; --good:#16a34a; --pending:#ea580c; --bad:#ef4444;
-      --radius:16px; --pad:14px; --shadow:0 8px 24px rgba(0,0,0,.06);
-    }
-
-    * { box-sizing:border-box; margin:0; padding:0; }
-    html, body { height:100%; font:16px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text","SF Pro Display",Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; background:linear-gradient(180deg,#f9fafb 0%,#eef1f6 100%); color:var(--text); }
-
-    header {
-      position:sticky; top:0; z-index:10;
-      display:flex; align-items:center; gap:16px; padding:12px 16px;
-      backdrop-filter:saturate(180%) blur(18px); background:#ffffffb3; border-bottom:1px solid #eceef2;
-    }
-    .brand { font-weight:700; }
-    .pill { padding:8px 12px; border-radius:999px; background:#eef2ff; color:#334155; font-weight:600; }
-
-    main.grid {
-      display:grid; gap:16px; padding:16px; max-width:1800px; margin:0 auto;
-      grid-template-columns:280px 1fr 380px;
-    }
-    @media(max-width:1400px){ main.grid { grid-template-columns:1fr 380px; } }
-    @media(max-width:900px){ main.grid { grid-template-columns:1fr; } }
-
-    .card {
-      background:var(--glass); border-radius:var(--radius); box-shadow:var(--shadow);
-      padding:var(--pad); backdrop-filter:saturate(160%) blur(14px);
-    }
-    .card h3 { margin:0 0 10px; font-size:18px; }
-
-    .btn {
-      display:inline-flex; align-items:center; gap:8px; padding:10px 14px;
-      border:0; border-radius:12px; background:linear-gradient(#0a84ff,#0066d6);
-      color:#fff; font-weight:600; box-shadow:var(--shadow); cursor:pointer; transition: all 0.2s;
-    }
-    .btn:hover { transform: translateY(-1px); box-shadow: 0 12px 28px rgba(0,0,0,.1); }
-    .btn.secondary { background:#eef1f6; color:#0b0c0f; }
-    .btn.ghost { background:transparent; border:1px solid #e5e7eb; color:#0b0c0f; box-shadow: none; }
-    .btn.danger { background:linear-gradient(#ef4444,#dc2626); color:#fff; }
-    .btn.small { padding:6px 10px; font-size:13px; }
-
-    .stat {
-      display:flex; align-items:center; justify-content:space-between; padding:12px;
-      background:#fff; border-radius:12px; border:1px solid #eef0f4;
-    }
-    .tag {
-      padding:6px 10px; border-radius:999px; font-weight:700; font-size:12px;
-    }
-    .tag.pending { background:#ffedd5; color:var(--pending); }
-    .tag.confirm { background:#dcfce7; color:var(--good); }
-
-    .calendar { padding:0; overflow:hidden; }
-    .cal-head { display:flex; align-items:center; justify-content:space-between; padding:12px 12px 8px; }
-    .cal-title { font-weight:700; font-size:18px; }
-    .legend { display:flex; gap:10px; align-items:center; color:var(--muted); font-size:12px; }
-    .dot { width:10px; height:10px; border-radius:50%; display:inline-block; }
-    .dot.pending { background:var(--pending); }
-    .dot.confirm { background:var(--good); }
-
-    .cal-grid {
-      display:grid; grid-template-columns:repeat(7,1fr); gap:10px; padding:12px;
-      background:transparent; border-top:1px solid #eceef2;
-    }
-    .dow {
-      text-align: center;
-      font-weight: 700;
-      font-size: 12px;
-      color: #64748b;
-      padding: 8px 0;
-      border-bottom: 1px solid #eef0f4;
-    }
-    .cell {
-      aspect-ratio:1/1; background:#fff; border:1px solid #eef0f4;
-      border-radius:12px; position:relative; overflow:hidden;
-    }
-    .date { position:absolute; top:8px; right:10px; color:#94a3b8; font-size:12px; z-index:3; pointer-events:none; }
-    .seg {
-      position:absolute; inset:8px; border-radius:12px; color:#fff;
-      font-weight:800; font-size:13px; display:flex; align-items:center; justify-content:center;
-      text-align:center; cursor:pointer; z-index:1;
-    }
-    .seg.pending { background:var(--pending); }
-    .seg.confirm { background:var(--good); }
-
-    /* Email Sidebar */
-    .email-list {
-      max-height: calc(100vh - 200px);
-      overflow-y: auto;
-    }
-    .email-item {
-      background:#fff; border:1px solid #eef0f4; border-radius:12px;
-      padding:12px; margin-bottom:10px; cursor:pointer; transition: all 0.2s;
-    }
-    .email-item:hover {
-      border-color: var(--accent);
-      box-shadow: 0 4px 12px rgba(0,0,0,.08);
-    }
-    .email-item.unread {
-      background:#f0f9ff;
-      border-color: #bae6fd;
-    }
-    .email-item.assigned {
-      border-left: 4px solid var(--good);
-    }
-    .email-from {
-      font-weight:700;
-      font-size:14px;
-      color:var(--text);
-      margin-bottom:4px;
-    }
-    .email-subject {
-      font-size:13px;
-      color:#64748b;
-      margin-bottom:6px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .email-snippet {
-      font-size:12px;
-      color:#94a3b8;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-    }
-    .email-meta {
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      margin-top:8px;
-      padding-top:8px;
-      border-top:1px solid #eef0f4;
-    }
-    .email-date {
-      font-size:11px;
-      color:#94a3b8;
-    }
-    .email-badge {
-      font-size:10px;
-      padding:3px 8px;
-      border-radius:999px;
-      background:#dcfce7;
-      color:var(--good);
-      font-weight:700;
-    }
-
-    .auth-banner {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 16px;
-      border-radius: 12px;
-      margin-bottom: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .overlay {
-      position:fixed; inset:0; background:rgba(0,0,0,.25);
-      display:none; align-items:center; justify-content:center; padding:16px; z-index:100;
-    }
-    .modal {
-      width:min(900px,96vw); 
-      max-height: 90vh;
-      background:#fff; border-radius:20px;
-      box-shadow:0 24px 60px rgba(0,0,0,.18); overflow:hidden;
-      display: flex;
-      flex-direction: column;
-    }
-    .modal-head {
-      display:flex; align-items:center; justify-content:space-between;
-      padding:16px 18px; border-bottom:1px solid #eef0f4;
-    }
-    .modal-body {
-      padding:16px 18px; 
-      overflow-y: auto;
-      flex: 1;
-    }
-    .modal-grid {
-      display:grid; grid-template-columns:1fr 1fr; gap:12px;
-    }
-    .row {
-      background:#f8fafc; border:1px solid #eef0f4; border-radius:12px;
-      padding:10px 12px;
-    }
-    .row label { display:block; color:#64748b; font-size:12px; margin-bottom:6px; }
-    
-    .row input, .row textarea, .row select {
-      width: 100%;
-      padding: 8px 10px;
-      border: 1px solid #e5e7eb;
-      border-radius: 8px;
-      font-size: 14px;
-      font-family: inherit;
-      background: #fff;
-      transition: border-color 0.2s;
-    }
-    .row input:focus, .row textarea:focus, .row select:focus {
-      outline: none;
-      border-color: var(--accent);
-    }
-    .row textarea {
-      resize: vertical;
-      min-height: 80px;
-    }
-    .row.editable {
-      background: #fff;
-      padding: 10px 12px;
-    }
-    .row.full-width {
-      grid-column: 1 / span 2;
-    }
-    .date-range {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .date-range input {
-      flex: 1;
-    }
-    .date-range span {
-      color: var(--muted);
-      font-size: 14px;
-    }
-    .number-fields {
-      display: flex;
-      gap: 12px;
-    }
-    .number-field {
-      flex: 1;
-    }
-    .calculated-value {
-      background: rgba(10, 132, 255, 0.08);
-      padding: 10px 12px;
-      border-radius: 8px;
-      font-weight: 700;
-      color: var(--accent);
-      font-size: 14px;
-    }
-    .warning-value {
-      background: rgba(234, 88, 12, 0.08);
-      padding: 10px 12px;
-      border-radius: 8px;
-      font-weight: 700;
-      color: var(--pending);
-      font-size: 14px;
-    }
-
-    .modal-actions {
-      display:flex; gap:10px; padding:16px 18px;
-      border-top:1px solid #eef0f4; justify-content:space-between;
-    }
-    .modal-actions-left {
-      display: flex;
-      gap: 10px;
-    }
-    .modal-actions-right {
-      display: flex;
-      gap: 10px;
-      margin-left: auto;
-    }
-    .status-tag {
-      display:inline-block; padding:4px 10px; border-radius:999px;
-      font-size:12px; font-weight:700;
-    }
-    .status-tag.confirm { background:#dcfce7; color:var(--good); }
-    .status-tag.pending { background:#ffedd5; color:var(--pending); }
-
-    .email-section {
-      background:#f8fafc;
-      border:1px solid #eef0f4;
-      border-radius:12px;
-      padding:12px;
-      margin-bottom:12px;
-    }
-    .email-section h4 {
-      font-size:14px;
-      margin-bottom:10px;
-      color:var(--text);
-    }
-    .booking-email-item {
-      background:#fff;
-      border:1px solid #e5e7eb;
-      border-radius:8px;
-      padding:8px 10px;
-      margin-bottom:8px;
-      font-size:13px;
-    }
-    .booking-email-item:last-child {
-      margin-bottom:0;
-    }
-    .booking-email-subject {
-      font-weight:600;
-      margin-bottom:3px;
-    }
-    .booking-email-date {
-      color:#94a3b8;
-      font-size:11px;
-    }
-
-    .tabs {
-      display:flex;
-      gap:8px;
-      border-bottom:2px solid #eef0f4;
-      margin-bottom:16px;
-    }
-    .tab {
-      padding:10px 16px;
-      border:none;
-      background:transparent;
-      color:#64748b;
-      font-weight:600;
-      cursor:pointer;
-      position:relative;
-      transition: all 0.2s;
-    }
-    .tab:hover {
-      color:var(--text);
-    }
-    .tab.active {
-      color:var(--accent);
-    }
-    .tab.active::after {
-      content:'';
-      position:absolute;
-      bottom:-2px;
-      left:0;
-      right:0;
-      height:2px;
-      background:var(--accent);
-    }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Chalet Dashboard — Gmail Integration</title>
+<style>
+:root {
+  --bg:#f7f7f9;
+  --glass:#ffffffcc;
+  --text:#0b0c0f;
+  --muted:#6b7280;
+  --accent:#0a84ff;
+  --good:#16a34a;
+  --pending:#ea580c;
+  --bad:#ef4444;
+  --radius:16px;
+  --pad:14px;
+  --shadow:0 8px 24px rgba(0,0,0,.06);
+}
+* {
+  box-sizing:border-box;
+  margin:0;
+  padding:0;
+}
+html, body {
+  height:100%;
+  font:16px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text","SF Pro Display",Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  background:linear-gradient(180deg,#f9fafb 0%,#eef1f6 100%);
+  color:var(--text);
+}
+header {
+  position:sticky;
+  top:0;
+  z-index:10;
+  display:flex;
+  align-items:center;
+  gap:16px;
+  padding:12px 16px;
+  backdrop-filter:saturate(180%) blur(18px);
+  background:#ffffffb3;
+  border-bottom:1px solid #eceef2;
+}
+.brand {
+  font-weight:700;
+}
+.pill {
+  padding:8px 12px;
+  border-radius:999px;
+  background:#eef2ff;
+  color:#334155;
+  font-weight:600;
+}
+main.grid {
+  display:grid;
+  gap:16px;
+  padding:16px;
+  max-width:1800px;
+  margin:0 auto;
+  grid-template-columns:280px 1fr 380px;
+}
+@media(max-width:1400px){
+  main.grid {
+    grid-template-columns:1fr 380px;
+  }
+}
+@media(max-width:900px){
+  main.grid {
+    grid-template-columns:1fr;
+  }
+}
+.card {
+  background:var(--glass);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  padding:var(--pad);
+  backdrop-filter:saturate(160%) blur(14px);
+}
+.card h3 {
+  margin:0 0 10px;
+  font-size:18px;
+}
+.btn {
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:10px 14px;
+  border:0;
+  border-radius:12px;
+  background:linear-gradient(#0a84ff,#0066d6);
+  color:#fff;
+  font-weight:600;
+  box-shadow:var(--shadow);
+  cursor:pointer;
+  transition: all 0.2s;
+}
+.btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(0,0,0,.1);
+}
+.btn.secondary {
+  background:#eef1f6;
+  color:#0b0c0f;
+}
+.btn.ghost {
+  background:transparent;
+  border:1px solid #e5e7eb;
+  color:#0b0c0f;
+  box-shadow: none;
+}
+.btn.danger {
+  background:linear-gradient(#ef4444,#dc2626);
+  color:#fff;
+}
+.btn.small {
+  padding:6px 10px;
+  font-size:13px;
+}
+.stat {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:12px;
+  background:#fff;
+  border-radius:12px;
+  border:1px solid #eef0f4;
+}
+.tag {
+  padding:6px 10px;
+  border-radius:999px;
+  font-weight:700;
+  font-size:12px;
+}
+.tag.pending {
+  background:#ffedd5;
+  color:var(--pending);
+}
+.tag.confirm {
+  background:#dcfce7;
+  color:var(--good);
+}
+.calendar {
+  padding:0;
+  overflow:hidden;
+}
+.cal-head {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:12px 12px 8px;
+}
+.cal-title {
+  font-weight:700;
+  font-size:18px;
+}
+.legend {
+  display:flex;
+  gap:10px;
+  align-items:center;
+  color:var(--muted);
+  font-size:12px;
+}
+.dot {
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  display:inline-block;
+}
+.dot.pending {
+  background:var(--pending);
+}
+.dot.confirm {
+  background:var(--good);
+}
+.cal-grid {
+  display:grid;
+  grid-template-columns:repeat(7,1fr);
+  gap:10px;
+  padding:12px;
+  background:transparent;
+  border-top:1px solid #eceef2;
+}
+.dow {
+  text-align: center;
+  font-weight: 700;
+  font-size: 12px;
+  color: #64748b;
+  padding: 8px 0;
+  border-bottom: 1px solid #eef0f4;
+}
+.cell {
+  aspect-ratio:1/1;
+  background:#fff;
+  border:1px solid #eef0f4;
+  border-radius:12px;
+  position:relative;
+  overflow:hidden;
+}
+.date {
+  position:absolute;
+  top:8px;
+  right:10px;
+  color:#94a3b8;
+  font-size:12px;
+  z-index:3;
+  pointer-events:none;
+}
+.seg {
+  position:absolute;
+  inset:8px;
+  border-radius:12px;
+  color:#fff;
+  font-weight:800;
+  font-size:13px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  cursor:pointer;
+  z-index:1;
+}
+.seg.pending {
+  background:var(--pending);
+}
+.seg.confirm {
+  background:var(--good);
+}
+.email-list {
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+}
+.email-item {
+  background:#fff;
+  border:1px solid #eef0f4;
+  border-radius:12px;
+  padding:12px;
+  margin-bottom:10px;
+  cursor:pointer;
+  transition: all 0.2s;
+}
+.email-item:hover {
+  border-color: var(--accent);
+  box-shadow: 0 4px 12px rgba(0,0,0,.08);
+}
+.email-item.unread {
+  background:#f0f9ff;
+  border-color: #bae6fd;
+}
+.email-item.assigned {
+  border-left: 4px solid var(--good);
+}
+.email-from {
+  font-weight:700;
+  font-size:14px;
+  color:var(--text);
+  margin-bottom:4px;
+}
+.email-subject {
+  font-size:13px;
+  color:#64748b;
+  margin-bottom:6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.email-snippet {
+  font-size:12px;
+  color:#94a3b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.email-meta {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-top:8px;
+  padding-top:8px;
+  border-top:1px solid #eef0f4;
+}
+.email-date {
+  font-size:11px;
+  color:#94a3b8;
+}
+.email-badge {
+  font-size:10px;
+  padding:3px 8px;
+  border-radius:999px;
+  background:#dcfce7;
+  color:var(--good);
+  font-weight:700;
+}
+.auth-banner {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 16px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.overlay {
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.25);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:16px;
+  z-index:100;
+}
+.modal {
+  width:min(900px,96vw);
+  max-height: 90vh;
+  background:#fff;
+  border-radius:20px;
+  box-shadow:0 24px 60px rgba(0,0,0,.18);
+  overflow:hidden;
+  display: flex;
+  flex-direction: column;
+}
+.modal-head {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:16px 18px;
+  border-bottom:1px solid #eef0f4;
+}
+.modal-body {
+  padding:16px 18px;
+  overflow-y: auto;
+  flex: 1;
+}
+.modal-grid {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+}
+.row {
+  background:#f8fafc;
+  border:1px solid #eef0f4;
+  border-radius:12px;
+  padding:10px 12px;
+}
+.row label {
+  display:block;
+  color:#64748b;
+  font-size:12px;
+  margin-bottom:6px;
+}
+.row input, .row textarea, .row select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #fff;
+  transition: border-color 0.2s;
+}
+.row input:focus, .row textarea:focus, .row select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.row textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+.row.editable {
+  background: #fff;
+  padding: 10px 12px;
+}
+.row.full-width {
+  grid-column: 1 / span 2;
+}
+.date-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.date-range input {
+  flex: 1;
+}
+.date-range span {
+  color: var(--muted);
+  font-size: 14px;
+}
+.number-fields {
+  display: flex;
+  gap: 12px;
+}
+.number-field {
+  flex: 1;
+}
+.calculated-value {
+  background: rgba(10, 132, 255, 0.08);
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 14px;
+}
+.warning-value {
+  background: rgba(234, 88, 12, 0.08);
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-weight: 700;
+  color: var(--pending);
+  font-size: 14px;
+}
+.modal-actions {
+  display:flex;
+  gap:10px;
+  padding:16px 18px;
+  border-top:1px solid #eef0f4;
+  justify-content:space-between;
+}
+.modal-actions-left {
+  display: flex;
+  gap: 10px;
+}
+.modal-actions-right {
+  display: flex;
+  gap: 10px;
+  margin-left: auto;
+}
+.status-tag {
+  display:inline-block;
+  padding:4px 10px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:700;
+}
+.status-tag.confirm {
+  background:#dcfce7;
+  color:var(--good);
+}
+.status-tag.pending {
+  background:#ffedd5;
+  color:var(--pending);
+}
+.email-section {
+  background:#f8fafc;
+  border:1px solid #eef0f4;
+  border-radius:12px;
+  padding:12px;
+  margin-bottom:12px;
+}
+.email-section h4 {
+  font-size:14px;
+  margin-bottom:10px;
+  color:var(--text);
+}
+.booking-email-item {
+  background:#fff;
+  border:1px solid #e5e7eb;
+  border-radius:8px;
+  padding:8px 10px;
+  margin-bottom:8px;
+  font-size:13px;
+}
+.booking-email-item:last-child {
+  margin-bottom:0;
+}
+.booking-email-subject {
+  font-weight:600;
+  margin-bottom:3px;
+}
+.booking-email-date {
+  color:#94a3b8;
+  font-size:11px;
+}
+.tabs {
+  display:flex;
+  gap:8px;
+  border-bottom:2px solid #eef0f4;
+  margin-bottom:16px;
+}
+.tab {
+  padding:10px 16px;
+  border:none;
+  background:transparent;
+  color:#64748b;
+  font-weight:600;
+  cursor:pointer;
+  position:relative;
+  transition: all 0.2s;
+}
+.tab:hover {
+  color:var(--text);
+}
+.tab.active {
+  color:var(--accent);
+}
+.tab.active::after {
+  content:'';
+  position:absolute;
+  bottom:-2px;
+  left:0;
+  right:0;
+  height:2px;
+  background:var(--accent);
+}
+.sidebar-left {
+  display: none;
+}
+@media(min-width:1400px){
+  .sidebar-left {
+    display: block;
+  }
+}
+</style>
 </head>
 <body>
-  <header>
-    <div class="brand">🏔️ Chalet Manager</div>
-    <span class="pill">Gmail Integration</span>
-    <div style="margin-left:auto;display:flex;gap:8px">
-      <button class="btn secondary" id="syncEmailsBtn">📧 E-Mails synchronisieren</button>
-      <button class="btn" id="addBookingBtn">Buchung hinzufügen</button>
-    </div>
-  </header>
-  
-  <main class="grid">
-    <aside style="display:none" class="sidebar-left">
-      <div class="card">
-        <h3>Nächster Termin</h3>
-        <div class="stat" style="margin-top:8px" id="nextAppointment">
-          <div>
-            <div style="color:var(--muted);font-size:14px">Wird geladen...</div>
-          </div>
-          <span class="tag confirm">—</span>
-        </div>
-      </div>
-    </aside>
-    
-    <section class="card calendar">
-      <div class="cal-head">
-        <div class="cal-title" id="calTitle">Kalender</div>
-        <div class="legend" style="margin-left:auto;margin-right:auto">
-          <span class="dot pending"></span> Ausstehend
-          <span class="dot confirm" style="margin-left:12px"></span> Bestätigt
-        </div>
-        <div style="display:flex;gap:8px">
-          <button class="btn secondary" id="prevBtn">‹</button>
-          <button class="btn secondary" id="todayBtn">Heute</button>
-          <button class="btn secondary" id="nextBtn">›</button>
-        </div>
-      </div>
-      <div class="cal-grid" id="calGrid"></div>
-    </section>
-    
-    <section>
-      <div class="card">
-        <div id="authBanner" style="display:none" class="auth-banner">
-          <div>
-            <strong>Gmail nicht verbunden</strong>
-            <div style="font-size:14px;opacity:0.9;margin-top:4px">
-              Verbinden Sie Ihr Gmail-Konto, um E-Mails zu verwalten
-            </div>
-          </div>
-          <button class="btn" id="connectGmailBtn">Verbinden</button>
-        </div>
-        
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-          <h3 style="margin:0">📬 E-Mail Posteingang</h3>
-          <span id="emailCount" class="pill" style="font-size:12px">0</span>
-        </div>
-        
-        <div id="emailList" class="email-list">
-          <div style="text-align:center;color:var(--muted);padding:20px">
-            Keine E-Mails geladen
-          </div>
-        </div>
-      </div>
-    </section>
-  </main>
-
-  <!-- Booking Modal -->
-  <div class="overlay" id="bookingOverlay">
-    <div class="modal">
-      <div class="modal-head">
-        <div class="modal-title" id="mTitle">Buchung</div>
-        <button class="btn ghost" id="mClose">✕</button>
-      </div>
-      
-      <div class="tabs">
-        <button class="tab active" data-tab="details">Details</button>
-        <button class="tab" data-tab="emails">E-Mails (<span id="bookingEmailCount">0</span>)</button>
-      </div>
-      
-      <div class="modal-body">
-        <div id="tabDetails">
-          <div class="modal-grid">
-            <div class="row editable">
-              <label>Gast</label>
-              <input type="text" id="mGuest" />
-            </div>
-            <div class="row editable">
-              <label>Status</label>
-              <select id="mStatus" class="status-pending">
-                <option value="pending">Ausstehend</option>
-                <option value="confirm">Bestätigt</option>
-              </select>
-            </div>
-            <div class="row editable full-width">
-              <label>Zeitraum</label>
-              <div class="date-range">
-                <input type="date" id="mStart" />
-                <span>bis</span>
-                <input type="date" id="mEnd" />
-              </div>
-            </div>
-            <div class="row editable">
-              <label>E-Mail</label>
-              <input type="email" id="mEmail" />
-            </div>
-            <div class="row editable">
-              <label>Telefon</label>
-              <input type="text" id="mPhone" />
-            </div>
-            <div class="row editable full-width">
-              <label>Adresse</label>
-              <textarea id="mAddress"></textarea>
-            </div>
-            <div class="row editable full-width">
-              <label>Gäste</label>
-              <div class="number-fields">
-                <div class="number-field">
-                  <label>Erwachsene</label>
-                  <input type="number" id="mAdults" min="0" value="2" />
-                </div>
-                <div class="number-field">
-                  <label>Kinder</label>
-                  <input type="number" id="mChildren" min="0" value="0" />
-                </div>
-              </div>
-            </div>
-            <div class="row editable">
-              <label>Gesamtbetrag</label>
-              <input type="text" id="mAmount" placeholder="0.00" />
-            </div>
-            <div class="row editable">
-              <label>Anzahlung</label>
-              <input type="text" id="mDeposit" placeholder="0.00" />
-            </div>
-            <div class="row editable">
-              <label>Anzahlung fällig</label>
-              <input type="date" id="mDepositDue" />
-            </div>
-            <div class="row">
-              <label>Aufenthaltsabgabe</label>
-              <div class="calculated-value" id="mTouristTax">€0.00</div>
-            </div>
-            <div class="row">
-              <label>Gesamtpreis inkl.</label>
-              <div class="calculated-value" id="mTotalWithTax">€0.00</div>
-            </div>
-            <div class="row">
-              <label>Stornokosten</label>
-              <div class="warning-value" id="mCancellationFee">Kostenlos stornierbar</div>
-            </div>
-            <div class="row editable full-width">
-              <label>Notizen</label>
-              <textarea id="mNotes"></textarea>
-            </div>
-          </div>
-        </div>
-        
-        <div id="tabEmails" style="display:none">
-          <div class="email-section">
-            <h4>Zugewiesene E-Mails</h4>
-            <div id="bookingEmails">
-              <div style="text-align:center;color:var(--muted);padding:20px">
-                Keine E-Mails zugewiesen
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <div class="modal-actions">
-        <div class="modal-actions-left">
-          <button class="btn danger" id="deleteBtn" style="display:none;">Löschen</button>
-        </div>
-        <div class="modal-actions-right">
-          <button class="btn" id="sendPaymentReminderBtn">💳 Anzahlungserinnerung</button>
-          <button class="btn" id="sendWelcomeEmailBtn">👋 Willkommensmail</button>
-          <button class="btn" id="saveBtn">Speichern</button>
-        </div>
-      </div>
-    </div>
+<header>
+  <div class="brand">🏔️ Chalet Manager</div>
+  <span class="pill">Gmail Integration</span>
+  <div style="margin-left:auto;display:flex;gap:8px">
+    <button class="btn secondary" id="syncEmailsBtn">📧 E-Mails synchronisieren</button>
+    <button class="btn" id="addBookingBtn">Buchung hinzufügen</button>
   </div>
+</header>
 
-  <!-- Email Detail Modal -->
-  <div class="overlay" id="emailOverlay">
-    <div class="modal">
-      <div class="modal-head">
-        <div class="modal-title" id="emailModalTitle">E-Mail</div>
-        <button class="btn ghost" id="emailModalClose">✕</button>
-      </div>
-      <div class="modal-body" style="padding:20px">
-        <div style="margin-bottom:16px">
-          <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Von</div>
-          <div style="font-weight:700" id="emailDetailFrom"></div>
-        </div>
-        <div style="margin-bottom:16px">
-          <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Betreff</div>
-          <div style="font-weight:600" id="emailDetailSubject"></div>
-        </div>
-        <div style="margin-bottom:16px">
-          <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Datum</div>
-          <div id="emailDetailDate"></div>
-        </div>
-        <div style="margin-bottom:16px">
-          <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Nachricht</div>
-          <div style="background:#f8fafc;padding:16px;border-radius:8px;white-space:pre-wrap;line-height:1.6" id="emailDetailBody"></div>
-        </div>
+<main class="grid">
+  <aside class="sidebar-left">
+    <div class="card">
+      <h3>Nächster Termin</h3>
+      <div class="stat" style="margin-top:8px" id="nextAppointment">
         <div>
-          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:8px">
-            Buchung zuweisen
-          </label>
-          <select id="assignBookingSelect" style="width:100%;padding:8px;border-radius:8px;border:1px solid #e5e7eb">
-            <option value="">Keine Zuweisung</option>
-          </select>
+          <div style="color:var(--muted);font-size:14px">Wird geladen...</div>
         </div>
-      </div>
-      <div class="modal-actions">
-        <div class="modal-actions-right">
-          <button class="btn" id="assignEmailBtn">Zuweisen</button>
-        </div>
+        <span class="tag confirm">—</span>
       </div>
     </div>
-  </div>
+  </aside>
 
-  <!-- Email Compose Modal -->
-  <div class="overlay" id="composeOverlay">
-    <div class="modal">
-      <div class="modal-head">
-        <div class="modal-title" id="composeTitle">E-Mail senden</div>
-        <button class="btn ghost" id="composeClose">✕</button>
+  <section class="card calendar">
+    <div class="cal-head">
+      <div class="cal-title" id="calTitle">Kalender</div>
+      <div class="legend" style="margin-left:auto;margin-right:auto">
+        <span class="dot pending"></span> Ausstehend
+        <span class="dot confirm" style="margin-left:12px"></span> Bestätigt
       </div>
-      <div class="modal-body" style="padding:20px">
-        <div style="margin-bottom:16px">
-          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:8px">An</label>
-          <input type="email" id="composeTo" style="width:100%;padding:8px;border-radius:8px;border:1px solid #e5e7eb" />
-        </div>
-        <div style="margin-bottom:16px">
-          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:8px">Betreff</label>
-          <input type="text" id="composeSubject" style="width:100%;padding:8px;border-radius:8px;border:1px solid #e5e7eb" />
-        </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn secondary" id="prevBtn">‹</button>
+        <button class="btn secondary" id="todayBtn">Heute</button>
+        <button class="btn secondary" id="nextBtn">›</button>
+      </div>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+  </section>
+
+  <section>
+    <div class="card">
+      <div id="authBanner" style="display:none" class="auth-banner">
         <div>
-          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:8px">Nachricht</label>
-          <textarea id="composeBody" style="width:100%;min-height:300px;padding:12px;border-radius:8px;border:1px solid #e5e7eb;font-family:inherit;line-height:1.6"></textarea>
+          <strong>Gmail nicht verbunden</strong>
+          <div style="font-size:14px;opacity:0.9;margin-top:4px">
+            Verbinden Sie Ihr Gmail-Konto, um E-Mails zu verwalten
+          </div>
         </div>
+        <button class="btn" id="connectGmailBtn">Verbinden</button>
       </div>
-      <div class="modal-actions">
-        <div class="modal-actions-right">
-          <button class="btn secondary" id="composeCancelBtn">Abbrechen</button>
-          <button class="btn" id="composeSendBtn">📤 Senden</button>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <h3 style="margin:0">📬 E-Mail Posteingang</h3>
+        <span id="emailCount" class="pill" style="font-size:12px">0</span>
+      </div>
+      <div id="emailList" class="email-list">
+        <div style="text-align:center;color:var(--muted);padding:20px">
+          Keine E-Mails geladen
         </div>
       </div>
     </div>
-  </div>
+  </section>
+</main>
 
-  <script>
+<!-- Booking Modal -->
+<div class="overlay" id="bookingOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="mTitle">Buchung</div>
+      <button class="btn ghost" id="mClose">✕</button>
+    </div>
+    <div class="tabs">
+      <button class="tab active" data-tab="details">Details</button>
+      <button class="tab" data-tab="emails">E-Mails (<span id="bookingEmailCount">0</span>)</button>
+    </div>
+    <div class="modal-body">
+      <div id="tabDetails">
+        <div class="modal-grid">
+          <div class="row editable">
+            <label>Gast</label>
+            <input type="text" id="mGuest" />
+          </div>
+          <div class="row editable">
+            <label>Status</label>
+            <select id="mStatus" class="status-pending">
+              <option value="pending">Ausstehend</option>
+              <option value="confirm">Bestätigt</option>
+            </select>
+          </div>
+          <div class="row editable full-width">
+            <label>Zeitraum</label>
+            <div class="date-range">
+              <input type="date" id="mStart" />
+              <span>bis</span>
+              <input type="date" id="mEnd" />
+            </div>
+          </div>
+          <div class="row editable">
+            <label>E-Mail</label>
+            <input type="email" id="mEmail" />
+          </div>
+          <div class="row editable">
+            <label>Telefon</label>
+            <input type="text" id="mPhone" />
+          </div>
+          <div class="row editable full-width">
+            <label>Adresse</label>
+            <textarea id="mAddress"></textarea>
+          </div>
+          <div class="row editable full-width">
+            <label>Gäste</label>
+            <div class="number-fields">
+              <div class="number-field">
+                <label>Erwachsene</label>
+                <input type="number" id="mAdults" min="0" value="2" />
+              </div>
+              <div class="number-field">
+                <label>Kinder</label>
+                <input type="number" id="mChildren" min="0" value="0" />
+              </div>
+            </div>
+          </div>
+          <div class="row editable">
+            <label>Gesamtbetrag</label>
+            <input type="text" id="mAmount" placeholder="0.00" />
+          </div>
+          <div class="row editable">
+            <label>Anzahlung</label>
+            <input type="text" id="mDeposit" placeholder="0.00" />
+          </div>
+          <div class="row editable">
+            <label>Anzahlung fällig</label>
+            <input type="date" id="mDepositDue" />
+          </div>
+          <div class="row">
+            <label>Aufenthaltsabgabe</label>
+            <div class="calculated-value" id="mTouristTax">€0.00</div>
+          </div>
+          <div class="row">
+            <label>Gesamtpreis inkl.</label>
+            <div class="calculated-value" id="mTotalWithTax">€0.00</div>
+          </div>
+          <div class="row">
+            <label>Stornokosten</label>
+            <div class="warning-value" id="mCancellationFee">Kostenlos stornierbar</div>
+          </div>
+          <div class="row editable full-width">
+            <label>Notizen</label>
+            <textarea id="mNotes"></textarea>
+          </div>
+        </div>
+      </div>
+      <div id="tabEmails" style="display:none">
+        <div class="email-section">
+          <h4>Zugewiesene E-Mails</h4>
+          <div id="bookingEmails">
+            <div style="text-align:center;color:var(--muted);padding:20px">
+              Keine E-Mails zugewiesen
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <div class="modal-actions-left">
+        <button class="btn danger" id="deleteBtn" style="display:none;">Löschen</button>
+      </div>
+      <div class="modal-actions-right">
+        <button class="btn" id="sendPaymentReminderBtn">💳 Anzahlungserinnerung</button>
+        <button class="btn" id="sendWelcomeEmailBtn">👋 Willkommensmail</button>
+        <button class="btn" id="saveBtn">Speichern</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Email Detail Modal -->
+<div class="overlay" id="emailOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="emailModalTitle">E-Mail</div>
+      <button class="btn ghost" id="emailModalClose">✕</button>
+    </div>
+    <div class="modal-body" style="padding:20px">
+      <div style="margin-bottom:16px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Von</div>
+        <div style="font-weight:700" id="emailDetailFrom"></div>
+      </div>
+      <div style="margin-bottom:16px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Betreff</div>
+        <div style="font-weight:600" id="emailDetailSubject"></div>
+      </div>
+      <div style="margin-bottom:16px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Datum</div>
+        <div id="emailDetailDate"></div>
+      </div>
+      <div style="margin-bottom:16px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Nachricht</div>
+        <div style="background:#f8fafc;padding:16px;border-radius:8px;white-space:pre-wrap;line-height:1.6" id="emailDetailBody"></div>
+      </div>
+      <div>
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:8px">
+          Buchung zuweisen
+        </label>
+        <select id="assignBookingSelect" style="width:100%;padding:8px;border-radius:8px;border:1px solid #e5e7eb">
+          <option value="">Keine Zuweisung</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <div class="modal-actions-right">
+        <button class="btn" id="assignEmailBtn">Zuweisen</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Email Compose Modal -->
+<div class="overlay" id="composeOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="composeTitle">E-Mail senden</div>
+      <button class="btn ghost" id="composeClose">✕</button>
+    </div>
+    <div class="modal-body" style="padding:20px">
+      <div style="margin-bottom:16px">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:8px">An</label>
+        <input type="email" id="composeTo" style="width:100%;padding:8px;border-radius:8px;border:1px solid #e5e7eb" />
+      </div>
+      <div style="margin-bottom:16px">
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:8px">Betreff</label>
+        <input type="text" id="composeSubject" style="width:100%;padding:8px;border-radius:8px;border:1px solid #e5e7eb" />
+      </div>
+      <div>
+        <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:8px">Nachricht</label>
+        <textarea id="composeBody" style="width:100%;min-height:300px;padding:12px;border-radius:8px;border:1px solid #e5e7eb;font-family:inherit;line-height:1.6"></textarea>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <div class="modal-actions-right">
+        <button class="btn secondary" id="composeCancelBtn">Abbrechen</button>
+        <button class="btn" id="composeSendBtn">📤 Senden</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
 // ---- Data Storage ----
 let bookings = [];
 let emails = [];
@@ -635,7 +804,6 @@ async function saveBooking(booking) {
   if (!booking.id) {
     booking.id = 'booking_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
   }
-  
   try {
     const res = await fetch('/api/bookings', {
       method: 'PUT',
@@ -688,7 +856,6 @@ async function loadEmails() {
       return;
     }
     if (!res.ok) throw new Error('Failed to fetch emails');
-    
     emails = await res.json();
     isGmailConnected = true;
     document.getElementById('authBanner').style.display = 'none';
@@ -697,26 +864,8 @@ async function loadEmails() {
     console.error('❌ Could not load emails:', e);
     isGmailConnected = false;
     document.getElementById('authBanner').style.display = 'flex';
-  }
-}
-
-async function assignEmailToBooking(emailId, bookingId) {
-  try {
-    const res = await fetch('/api/emails/assign', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ emailId, bookingId })
-    });
-    if (!res.ok) throw new Error('Failed to assign');
-    await loadEmails();
-    return true;
-  } catch (err) {
-    console.error('❌ Error assigning email:', err);
-    return false;
-  }
-}
-
-async function sendEmail(to, subject, body) {
-  try {
-    const res = await fetch('/api/gmail/send', {
-      method: 'POST',
+    // Demo data
+    emails = [
+      {
+        id: 'email1',
+        from: 'schmidt@example.
