@@ -127,10 +127,18 @@ export async function onRequest(context) {
       );
       const msg = await msgRes.json();
 
+      // DEBUG: Log the entire message structure for first email
+      if (details.length === 0) {
+        console.log('First message structure:', JSON.stringify(msg, null, 2));
+        console.log('Headers:', msg.payload?.headers);
+      }
+
       // Extract headers from top-level payload
       const subject = findHeader(msg.payload, 'Subject') || '(Kein Betreff)';
       const fromHeader = findHeader(msg.payload, 'From') || 'Unbekannt';
       const dateHeader = findHeader(msg.payload, 'Date') || '';
+
+      console.log('Extracted values:', { subject, fromHeader, dateHeader });
 
       // Extract clean sender name
       const fromName = extractFromName(fromHeader);
@@ -147,7 +155,12 @@ export async function onRequest(context) {
         from: fromName,
         subject,
         date: dateFormatted,
-        body
+        body,
+        // Add raw values for debugging
+        _debug: {
+          rawFrom: fromHeader,
+          rawDate: dateHeader
+        }
       });
     }
 
