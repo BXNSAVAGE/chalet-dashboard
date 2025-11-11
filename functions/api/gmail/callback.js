@@ -8,7 +8,6 @@ export async function onRequest(context) {
   }
 
   try {
-    // Exchange code for tokens
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -27,7 +26,6 @@ export async function onRequest(context) {
       return new Response('Failed to get tokens: ' + JSON.stringify(tokens), { status: 500 });
     }
 
-    // Optionally store tokens in D1
     if (env.DB) {
       const expiresAt = Math.floor(Date.now() / 1000) + tokens.expires_in;
       await env.DB.prepare(
@@ -35,7 +33,8 @@ export async function onRequest(context) {
       ).bind(tokens.access_token, tokens.refresh_token, expiresAt).run();
     }
 
-    return Response.redirect('/', 302);
+    const redirectTo = env.GMAIL_SUCCESS_REDIRECT_URL || 'https://chalet-dashboard-4fr.pages.dev/';
+    return Response.redirect(redirectTo, 302);
   } catch (err) {
     return new Response('Error: ' + err.message, { status: 500 });
   }
