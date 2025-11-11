@@ -145,25 +145,24 @@ export async function onRequest(context) {
   // --- DELETE: Remove a booking ---
   if (request.method === 'DELETE') {
     try {
-      // Extract ID from URL path (e.g., /api/bookings/123)
-      const pathParts = url.pathname.split('/');
-      const bookingId = pathParts[pathParts.length - 1];
+      const body = await request.json();
+      const bookingId = body.id;
 
-      if (!bookingId || bookingId === 'bookings') {
+      if (!bookingId) {
         return new Response(JSON.stringify({ error: 'Missing booking ID' }), { status: 400 });
       }
+
+      console.log('🗑️ Deleting booking:', bookingId);
 
       const result = await db
         .prepare('DELETE FROM bookings WHERE id = ?')
         .bind(bookingId)
         .run();
 
-      if (result.changes === 0) {
-        return new Response(JSON.stringify({ error: 'Booking not found' }), { status: 404 });
-      }
+      console.log('Delete result:', result);
 
       return new Response(
-        JSON.stringify({ ok: true, id: bookingId, deleted: true }),
+        JSON.stringify({ ok: true, id: bookingId, deleted: true, changes: result.changes }),
         { headers: { 'Content-Type': 'application/json' } }
       );
     } catch (err) {
