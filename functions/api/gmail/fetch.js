@@ -2,7 +2,6 @@ export async function onRequest(context) {
   const { env } = context;
 
   try {
-    // === 1. Token aus D1 ===
     const row = await env.DB.prepare(
       'SELECT access_token, refresh_token, expires_at FROM gmail_tokens ORDER BY rowid DESC LIMIT 1'
     ).first();
@@ -10,7 +9,6 @@ export async function onRequest(context) {
 
     let { access_token, refresh_token, expires_at } = row;
 
-    // === 2. Refresh falls nötig ===
     if (Date.now() / 1000 > expires_at - 60) {
       const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
@@ -29,12 +27,9 @@ export async function onRequest(context) {
         await env.DB.prepare(
           'INSERT INTO gmail_tokens (access_token, refresh_token, expires_at) VALUES (?, ?, ?)'
         ).bind(access_token, refresh_token, expires_at).run();
-      } else {
-        return new Response('Failed to refresh token', { status: 401 });
       }
     }
 
-    // === 3. Nachrichtenliste ===
     const listRes = await fetch(
       'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=5',
       { headers: { Authorization: `Bearer ${access_token}` } }
@@ -42,7 +37,6 @@ export async function onRequest(context) {
     const list = await listRes.json();
     if (!list.messages) return new Response('No messages', { status: 200 });
 
-    // === 4. Hilfsfunktionen ===
     function safeDecode(b64) {
       try {
         const cleaned = b64.replace(/-/g, '+').replace(/_/g, '/');
@@ -64,51 +58,55 @@ export async function onRequest(context) {
       return out;
     }
 
-    function findHeader(headers, name) {
-      const h = headers.find(h => h.name.toLowerCase() === name.toLowerCase());
-      return h ? h.value : null;
+    function findHeaderRecursive(payload, name) {
+      if (!payload) return null;
+      const headers = payload.headers || [];
+      const found = headers.find(h => h.name.toLowerCase() === name.toLowerCase());
+      if (found) return found.value;
+      if (payload.parts) {
+        for (const p of payload.parts) {
+          const res = findHeaderRecursive(p, name);
+          if (res) return res;
+        }
+      }
+      return null;
     }
 
-    // === 5. Details je Mail ===
     const details = [];
+
     for (const m of list.messages) {
-      try {
-        const msgRes = await fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=full`,
-          { headers: { Authorization: `Bearer ${access_token}` } }
-        );
-        const msg = await msgRes.json();
-        const headers = msg.payload?.headers || [];
+      const msgRes = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=full`,
+        { headers: { Authorization: `Bearer ${access_token}` } }
+      );
+      const msg = await msgRes.json();
 
-        const subject = findHeader(headers, 'Subject') || '(Kein Betreff)';
-        const fromHeader = findHeader(headers, 'From') || 'Unbekannt';
-        const dateHeader = findHeader(headers, 'Date') || '';
+      const subject = findHeaderRecursive(msg.payload, 'Subject') || '(Kein Betreff)';
+      const fromHeader = findHeaderRecursive(msg.payload, 'From') || 'Unbekannt';
+      const dateHeader = findHeaderRecursive(msg.payload, 'Date') || '';
 
-        let fromName = fromHeader;
-        const match = fromHeader.match(/(.*)<(.*)>/);
-        if (match) fromName = match[1].trim() || match[2].trim();
+      let fromName = fromHeader;
+      const match = fromHeader.match(/(.*)<(.*)>/);
+      if (match) fromName = match[1].trim() || match[2].trim();
 
-        let dateFormatted = '';
-        if (dateHeader) {
-          const d = new Date(dateHeader);
-          if (!isNaN(d)) {
-            dateFormatted = d.toLocaleString('de-DE', {
-              day: '2-digit',
-              month: '2-digit',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit'
-            });
-          }
+      let dateFormatted = '';
+      if (dateHeader) {
+        const d = new Date(dateHeader);
+        if (!isNaN(d)) {
+          dateFormatted = d.toLocaleString('de-DE', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          });
         }
-
-        let body = extractBody(msg.payload);
-        if (!body && msg.snippet) body = msg.snippet;
-
-        details.push({ id: m.id, from: fromName, subject, date: dateFormatted, body });
-      } catch (e) {
-        details.push({ id: m.id, from: 'Fehler', subject: e.message, date: '', body: '' });
       }
+
+      let body = extractBody(msg.payload);
+      if (!body && msg.snippet) body = msg.snippet;
+
+      details.push({ id: m.id, from: fromName, subject, date: dateFormatted, body });
     }
 
     return new Response(JSON.stringify(details, null, 2), {
