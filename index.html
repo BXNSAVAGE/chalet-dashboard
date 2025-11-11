@@ -478,8 +478,10 @@ async function saveBooking(booking) {
 }
 async function deleteBooking(bookingId) {
   try {
-    const res = await fetch(`/api/bookings/${bookingId}`, {
-      method: 'DELETE'
+    const res = await fetch('/api/bookings', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: bookingId })
     });
     if (!res.ok) throw new Error('Failed to delete booking');
     console.log('✅ Booking deleted:', bookingId);
