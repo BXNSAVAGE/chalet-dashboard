@@ -416,10 +416,9 @@ async function saveBooking(booking) {
   // Make sure we have an ID
   if (!booking.id) {
     booking.id = 'booking_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    console.log('Generated ID in saveBooking:', booking.id);
   }
-
-  console.log('Attempting to save booking:', booking);
+  
+  console.log('💾 Attempting to save booking:', booking.guest, 'ID:', booking.id);
 
   try {
     const res = await fetch('/api/bookings', {
@@ -434,7 +433,21 @@ async function saveBooking(booking) {
     
     const result = await res.json();
     console.log('✅ Booking saved via API:', result);
+    
+    // Wait a moment for DB to sync
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Reload bookings from API
     await loadBookings();
+    
+    // Check if the booking was actually loaded
+    const foundBooking = bookings.find(b => b.id === booking.id);
+    if (!foundBooking) {
+      console.warn('⚠️ Saved booking not found in API response! Adding locally as fallback.');
+      bookings.push({ ...booking });
+    } else {
+      console.log('✅ Confirmed booking in API response:', foundBooking.guest);
+    }
   } catch (err) {
     console.error('❌ API not available, saving locally:', err);
     
@@ -443,12 +456,12 @@ async function saveBooking(booking) {
     
     if (isNewBooking) {
       bookings.push(cleanBooking);
-      console.log('✅ Added new booking locally:', cleanBooking);
+      console.log('✅ Added new booking locally:', cleanBooking.guest);
     } else {
       const idx = bookings.findIndex(b => b.id === booking.id);
       if (idx !== -1) {
         bookings[idx] = cleanBooking;
-        console.log('✅ Updated booking locally at index', idx, ':', cleanBooking);
+        console.log('✅ Updated booking locally at index', idx);
       } else {
         console.warn('Could not find booking to update, adding as new');
         bookings.push(cleanBooking);
@@ -456,14 +469,13 @@ async function saveBooking(booking) {
     }
   }
   
-  console.log('All bookings after save:', JSON.stringify(bookings, null, 2));
+  console.log('📊 Total bookings after save:', bookings.length);
   
   // Always rebuild calendar and update widget
   buildMonth(view);
   updateNextAppointment();
   return true;
 }
-
 async function deleteBooking(bookingId) {
   try {
     const res = await fetch(`/api/bookings/${bookingId}`, {
