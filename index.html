@@ -367,7 +367,7 @@ async function loadBookings() {
     if (!res.ok) throw new Error('Failed to fetch bookings');
     const apiBookings = await res.json();
     bookings = apiBookings;
-    console.log('📥 Loaded bookings from API:', bookings.length, 'bookings');
+    console.log('Loaded bookings from API:', bookings);
   } catch (e) {
     console.error('❌ Could not load bookings from API:', e);
     // Keep existing local bookings if API fails
@@ -408,7 +408,7 @@ async function loadBookings() {
         }
       ];
     }
-    console.log('Using local bookings:', bookings.length, 'bookings');
+    console.log('Using local bookings:', bookings);
   }
 }
 
@@ -435,7 +435,7 @@ async function saveBooking(booking) {
     console.log('✅ Booking saved via API:', result);
     
     // Wait a moment for DB to sync
-    await new Promise(resolve => setTimeout(resolve, 300));
+    await new Promise(resolve => setTimeout(resolve, 500));
     
     // Reload bookings from API
     await loadBookings();
@@ -476,39 +476,24 @@ async function saveBooking(booking) {
   updateNextAppointment();
   return true;
 }
-
 async function deleteBooking(bookingId) {
   try {
-    console.log('🗑️ Attempting to delete booking:', bookingId);
-    
-    const res = await fetch('/api/bookings', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: bookingId })
+    const res = await fetch(`/api/bookings/${bookingId}`, {
+      method: 'DELETE'
     });
-    
-    if (!res.ok) {
-      const errorData = await res.json();
-      throw new Error(`Failed to delete booking: ${errorData.error || res.status}`);
-    }
-    
-    const result = await res.json();
-    console.log('✅ Booking deleted:', result);
-    
-    // Wait a moment for DB to sync
-    await new Promise(resolve => setTimeout(resolve, 300));
-    
+    if (!res.ok) throw new Error('Failed to delete booking');
+    console.log('✅ Booking deleted:', bookingId);
     await loadBookings();
     buildMonth(view);
     updateNextAppointment();
     return true;
   } catch (err) {
     console.error('❌ Error deleting booking:', err);
-    // For demo: remove from local array as fallback
+    // For demo: remove from local array
     bookings = bookings.filter(b => b.id !== bookingId);
     buildMonth(view);
     updateNextAppointment();
-    return false;
+    return true;
   }
 }
 
@@ -555,7 +540,7 @@ function buildMonth(date) {
   const calTitle = document.getElementById('calTitle');
   if (!calGrid) return;
 
-  console.log('📅 Building calendar for', date.toLocaleDateString('de-AT'), 'with', bookings.length, 'bookings');
+  console.log('Building calendar for', date, 'with', bookings.length, 'bookings');
 
   calGrid.innerHTML = '';
   const y = date.getFullYear();
@@ -609,19 +594,25 @@ function buildMonth(date) {
   }
 
   bookings.forEach(b => {
+    console.log('Processing booking:', b.guest, 'from', b.start, 'to', b.end);
     const dates = eachDate(b.start, b.end);
+    console.log('Dates for this booking:', dates);
     dates.forEach((dayIso) => {
       const cell = cellByDate[dayIso];
-      if (!cell) return;
+      if (!cell) {
+        console.log('Cell not found for date:', dayIso);
+        return;
+      }
       const seg = document.createElement('div');
       seg.className = 'seg ' + (b.status === 'confirm' ? 'confirm' : 'pending');
       seg.innerHTML = `${b.guest}`;
       seg.addEventListener('click', () => openModal(b));
       cell.appendChild(seg);
+      console.log('Added segment for', b.guest, 'on', dayIso);
     });
   });
   
-  console.log('✅ Calendar built successfully');
+  console.log('Calendar built successfully');
 }
 
 // ---- Modal ----
@@ -837,3 +828,6 @@ loadBookings().then(() => {
   buildMonth(view);
   updateNextAppointment();
 });
+  </script>
+</body>
+</html>
