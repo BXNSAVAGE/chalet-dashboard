@@ -509,20 +509,21 @@ function formatDateEU(dateStr) {
 }
 
     // Generate a unique color for each booking based on guest name
+// Generate a unique color for each booking based on guest name
 function getBookingColor(guestName) {
   const colors = [
     '#3b82f6', // blue
     '#8b5cf6', // purple
     '#ec4899', // pink
-    '#f59e0b', // amber
-    '#10b981', // emerald
+    '#f59e0b', // amber (darker than orange border)
     '#06b6d4', // cyan
     '#6366f1', // indigo
-    '#f97316', // orange
     '#14b8a6', // teal
     '#a855f7', // violet
     '#84cc16', // lime
     '#ef4444', // red
+    '#0ea5e9', // sky blue
+    '#d946ef', // fuchsia
   ];
   
   // Simple hash function to get consistent color for same guest
