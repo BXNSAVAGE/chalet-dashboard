@@ -39,28 +39,36 @@ export async function onRequest(context) {
     const list = await listRes.json();
     if (!list.messages) return new Response('No messages', { status: 200 });
 
-    // Step 2: fetch metadata for each message
-    const details = [];
-    for (const m of list.messages) {
-      const msgRes = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`,
-        { headers: { Authorization: `Bearer ${access_token}` } }
-      );
-      const msg = await msgRes.json();
+  const details = [];
+for (const m of list.messages) {
+  const msgRes = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`,
+    { headers: { Authorization: `Bearer ${access_token}` } }
+  );
+  const msg = await msgRes.json();
 
-      const headers = msg.payload?.headers || [];
-      const subject = headers.find(h => h.name === 'Subject')?.value || '(Kein Betreff)';
-      const from = headers.find(h => h.name === 'From')?.value || 'Unbekannt';
-      const date = headers.find(h => h.name === 'Date')?.value || null;
+  const headers = msg.payload?.headers || [];
+  const subject = headers.find(h => h.name === 'Subject')?.value || '(Kein Betreff)';
+  const fromRaw = headers.find(h => h.name === 'From')?.value || 'Unbekannt';
+  const dateRaw = headers.find(h => h.name === 'Date')?.value;
 
-      details.push({ id: m.id, subject, from, date });
-    }
+  // Parse the sender nicely: "John Doe <john@example.com>" → { name, email }
+  const fromMatch = fromRaw.match(/(.*)<(.*)>/);
+  const from = fromMatch
+    ? { name: fromMatch[1].trim() || fromMatch[2].trim(), email: fromMatch[2].trim() }
+    : { name: fromRaw.trim(), email: fromRaw.trim() };
 
-    return new Response(JSON.stringify(details), {
-      headers: { 'Content-Type': 'application/json' }
-    });
+  // Format date safely
+  let date = null;
+  try {
+    if (dateRaw) date = new Date(dateRaw).toISOString();
+  } catch { date = null; }
 
-  } catch (err) {
-    return new Response('Server error: ' + err.stack, { status: 500 });
-  }
+  details.push({
+    id: m.id,
+    subject,
+    from: from.name,
+    email: from.email,
+    date,
+  });
 }
