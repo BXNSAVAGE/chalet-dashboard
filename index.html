@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Chalet Dashboard — Vollständig</title>
+  <title>Chalet Manager — Vollständiges Dashboard</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     :root {
@@ -120,43 +120,65 @@
     .seg.pending { background:var(--pending); }
     .seg.confirm { background:var(--good); }
 
-    .email-list, .invoice-list {
+    .email-list {
       max-height: calc(100vh - 200px);
       overflow-y: auto;
     }
-    .email-item, .invoice-item {
+    .email-item {
       background:#fff; border:1px solid #eef0f4; border-radius:12px;
       padding:12px; margin-bottom:10px; cursor:pointer; transition: all 0.2s;
     }
-    .email-item:hover, .invoice-item:hover {
+    .email-item:hover {
       border-color: var(--accent);
       box-shadow: 0 4px 12px rgba(0,0,0,.08);
     }
-    .email-item.unread {
-      background:#f0f9ff;
-      border-color: #bae6fd;
-    }
-    .email-item.assigned {
-      border-left: 4px solid var(--good);
-    }
 
+    .folder-tree {
+      background:#fff; border-radius:12px; border:1px solid #eef0f4;
+      padding:12px; margin-bottom:16px; max-height:400px; overflow-y:auto;
+    }
+    .folder {
+      padding:10px 12px; border-radius:8px; cursor:pointer;
+      display:flex; align-items:center; gap:8px; transition: all 0.2s;
+      margin-bottom:4px;
+    }
+    .folder:hover { background:#f8fafc; }
+    .folder.active { background:#eff6ff; border-left:3px solid var(--accent); }
+    .folder-icon { font-size:18px; }
+    .folder-name { font-weight:600; flex:1; }
+    .folder-count { color:#94a3b8; font-size:12px; }
+
+    .invoice-list {
+      display:grid; gap:12px;
+    }
+    .invoice-item {
+      background:#fff; border:1px solid #eef0f4; border-radius:12px;
+      padding:14px 16px; cursor:pointer; transition: all 0.2s;
+      display:flex; align-items:center; gap:16px;
+    }
+    .invoice-item:hover {
+      border-color: var(--accent);
+      box-shadow: 0 4px 12px rgba(0,0,0,.08);
+    }
     .invoice-number {
       font-weight:700; font-size:16px; color:var(--accent);
-      display:inline-block;
+      min-width:80px;
+    }
+    .invoice-details {
+      flex:1;
     }
     .invoice-guest {
-      font-weight:600; margin-top:4px;
+      font-weight:600; margin-bottom:4px;
     }
     .invoice-date {
-      color:#94a3b8; font-size:13px; margin-top:4px;
+      color:#94a3b8; font-size:13px;
     }
     .invoice-amount {
       font-weight:700; font-size:18px; text-align:right;
-      float:right;
+      min-width:100px;
     }
     .invoice-status {
       padding:6px 12px; border-radius:999px; font-size:12px; font-weight:700;
-      display:inline-block; margin-top:8px;
     }
     .invoice-status.paid { background:#dcfce7; color:var(--good); }
     .invoice-status.pending { background:#ffedd5; color:var(--pending); }
@@ -189,7 +211,7 @@
     }
     .modal-actions {
       display:flex; gap:10px; padding:16px 18px;
-      border-top:1px solid #eef0f4; justify-content:flex-end;
+      border-top:1px solid #eef0f4; justify-content:space-between;
     }
 
     .form-grid {
@@ -325,7 +347,7 @@
         </div>
         <div class="stat-card">
           <div class="stat-label">Gesamtumsatz</div>
-          <div class="stat-value" id="totalRevenue">€0</div>
+          <div class="stat-value" id="totalRevenue">€0.00</div>
         </div>
       </div>
     </div>
@@ -333,8 +355,11 @@
     <div class="card">
       <div style="display:flex;gap:12px;margin-bottom:20px">
         <input type="text" id="searchInput" class="search-input" placeholder="🔍 Suche nach Rechnungsnummer, Gast, Betrag..." />
+        <button class="btn secondary" id="createFolderBtn">📁 Neuer Ordner</button>
         <button class="btn success" id="createInvoiceBtn">➕ Rechnung erstellen</button>
       </div>
+
+      <div class="folder-tree" id="folderTree"></div>
 
       <div class="invoice-list" id="invoiceList">
         <div style="text-align:center;color:var(--muted);padding:40px">
@@ -409,9 +434,13 @@
       </div>
       
       <div class="modal-actions">
-        <button class="btn danger" id="deleteBtn" style="display:none;">Löschen</button>
-        <button class="btn secondary" id="generateInvoiceBtn">🧾 Rechnung erstellen</button>
-        <button class="btn" id="saveBtn">Speichern</button>
+        <div>
+          <button class="btn danger" id="deleteBtn" style="display:none;">Löschen</button>
+        </div>
+        <div style="display:flex;gap:10px">
+          <button class="btn secondary" id="generateInvoiceBtn">🧾 Rechnung erstellen</button>
+          <button class="btn" id="saveBtn">Speichern</button>
+        </div>
       </div>
     </div>
   </div>
@@ -426,12 +455,12 @@
       <div class="modal-body">
         <div class="form-grid">
           <div class="form-field">
-            <label>Gast / Guest</label>
-            <input type="text" id="invGuest" />
+            <label>Gast / Guest *</label>
+            <input type="text" id="invGuest" required />
           </div>
           <div class="form-field">
-            <label>Rechnungsdatum</label>
-            <input type="date" id="invDate" />
+            <label>Rechnungsdatum *</label>
+            <input type="date" id="invDate" required />
           </div>
           <div class="form-field full">
             <label>Gastadresse</label>
@@ -446,12 +475,12 @@
             <input type="text" id="invPhone" />
           </div>
           <div class="form-field">
-            <label>Anreise</label>
-            <input type="date" id="invCheckin" />
+            <label>Anreise / Check-in *</label>
+            <input type="date" id="invCheckin" required />
           </div>
           <div class="form-field">
-            <label>Abreise</label>
-            <input type="date" id="invCheckout" />
+            <label>Abreise / Check-out *</label>
+            <input type="date" id="invCheckout" required />
           </div>
           <div class="form-field">
             <label>Erwachsene</label>
@@ -460,6 +489,12 @@
           <div class="form-field">
             <label>Kinder</label>
             <input type="number" id="invChildren" min="0" value="0" />
+          </div>
+          <div class="form-field full">
+            <label>Ordner auswählen</label>
+            <select id="invFolder">
+              <option value="">Automatisch (Jahr/Monat)</option>
+            </select>
           </div>
         </div>
 
@@ -523,8 +558,40 @@
         </div>
       </div>
       <div class="modal-actions">
-        <button class="btn secondary" id="cancelInvoiceBtn">Abbrechen</button>
-        <button class="btn success" id="saveInvoiceBtn">💾 Speichern</button>
+        <div></div>
+        <div style="display:flex;gap:10px">
+          <button class="btn secondary" id="cancelInvoiceBtn">Abbrechen</button>
+          <button class="btn success" id="saveInvoiceBtn">💾 Speichern & PDF erstellen</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Folder Modal -->
+  <div class="overlay" id="folderOverlay">
+    <div class="modal" style="max-width:500px">
+      <div class="modal-head">
+        <div>Neuer Ordner / New Folder</div>
+        <button class="btn ghost" id="closeFolderModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-field">
+          <label>Ordnername / Folder Name</label>
+          <input type="text" id="folderName" placeholder="z.B. Dezember 2025" />
+        </div>
+        <div class="form-field">
+          <label>Übergeordneter Ordner / Parent Folder</label>
+          <select id="parentFolder">
+            <option value="">Hauptverzeichnis / Root</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <div></div>
+        <div style="display:flex;gap:10px">
+          <button class="btn secondary" id="cancelFolderBtn">Abbrechen</button>
+          <button class="btn" id="saveFolderBtn">Erstellen</button>
+        </div>
       </div>
     </div>
   </div>
@@ -535,10 +602,12 @@ const { jsPDF } = window.jspdf;
 let bookings = [];
 let emails = [];
 let invoices = [];
+let folders = [];
 let currentBooking = null;
 let isNewBooking = false;
 let view = new Date();
 let nextInvoiceNumber = 1;
+let currentFolder = null;
 
 // Helper functions
 function pad(n) { return n < 10 ? ('0' + n) : '' + n; }
@@ -564,22 +633,40 @@ function getBookingColor(guestName) {
   return colors[Math.abs(hash) % colors.length];
 }
 
+// Storage API with localStorage fallback
+async function loadData(key) {
+  try {
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : [];
+  } catch (e) {
+    console.error(`Load ${key} error:`, e);
+    return [];
+  }
+}
+
+async function saveData(key, data) {
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+    return true;
+  } catch (e) {
+    console.error(`Save ${key} error:`, e);
+    return false;
+  }
+}
+
 // API functions
 async function loadBookings() {
-  try {
-    const res = await fetch('/api/bookings');
-    if (!res.ok) throw new Error('Failed');
-    bookings = await res.json();
-  } catch (e) {
-    console.error('Load bookings error:', e);
+  bookings = await loadData('bookings');
+  if (bookings.length === 0) {
     bookings = [{
-      id: '1', guest: 'Familie Müller', status: 'confirm',
-      start: '2025-11-15', end: '2025-11-20',
-      email: 'mueller@example.com', phone: '+43 123 456789',
-      address: 'Musterstraße 1\n1010 Wien',
-      adults: 2, children: 1, amount: '800',
-      notes: 'Frühanreise gewünscht'
+      id: '1', guest: 'Test', status: 'pending',
+      start: '2025-11-12', end: '2025-11-15',
+      email: 'test@example.com', phone: '+43 123 456789',
+      address: 'Teststraße 1\n1010 Wien',
+      adults: 2, children: 0, amount: '600',
+      notes: 'Test Buchung'
     }];
+    await saveData('bookings', bookings);
   }
 }
 
@@ -587,81 +674,100 @@ async function saveBooking(booking) {
   if (!booking.id) {
     booking.id = 'booking_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
   }
-  try {
-    const res = await fetch('/api/bookings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(booking)
-    });
-    if (!res.ok) throw new Error('Save failed');
-    await loadBookings();
-    buildMonth(view);
-    updateNextAppointment();
-    return true;
-  } catch (err) {
-    console.error('Save error:', err);
-    if (isNewBooking) bookings.push({ ...booking });
-    else {
-      const idx = bookings.findIndex(b => b.id === booking.id);
-      if (idx !== -1) bookings[idx] = { ...booking };
-    }
-    buildMonth(view);
-    return true;
+  
+  const idx = bookings.findIndex(b => b.id === booking.id);
+  if (idx !== -1) {
+    bookings[idx] = { ...booking };
+  } else {
+    bookings.push({ ...booking });
   }
+  
+  await saveData('bookings', bookings);
+  buildMonth(view);
+  updateNextAppointment();
+  return true;
 }
 
 async function deleteBooking(bookingId) {
-  try {
-    await fetch('/api/bookings', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: bookingId })
-    });
-    await loadBookings();
-    buildMonth(view);
-    updateNextAppointment();
-    return true;
-  } catch (err) {
-    bookings = bookings.filter(b => b.id !== bookingId);
-    buildMonth(view);
-    return true;
-  }
+  bookings = bookings.filter(b => b.id !== bookingId);
+  await saveData('bookings', bookings);
+  buildMonth(view);
+  updateNextAppointment();
+  return true;
 }
 
 async function loadInvoices() {
-  try {
-    const res = await fetch('/api/invoices');
-    if (!res.ok) throw new Error('Failed');
-    invoices = await res.json();
-    
-    if (invoices.length > 0) {
-      const maxNum = Math.max(...invoices.map(inv => parseInt(inv.number.split('/')[0]) || 0));
-      nextInvoiceNumber = maxNum + 1;
-    }
-  } catch (e) {
-    console.error('Load invoices error:', e);
-    invoices = [];
+  invoices = await loadData('invoices');
+  
+  if (invoices.length > 0) {
+    const maxNum = Math.max(...invoices.map(inv => parseInt(inv.number.split('/')[0]) || 0));
+    nextInvoiceNumber = maxNum + 1;
+  }
+}
+
+async function loadFolders() {
+  folders = await loadData('folders');
+  
+  // Auto-create year folder
+  const currentYear = new Date().getFullYear();
+  if (!folders.find(f => f.name === currentYear.toString() && !f.parent)) {
+    folders.push({
+      id: 'folder_' + Date.now(),
+      name: currentYear.toString(),
+      parent: null,
+      created: new Date().toISOString()
+    });
+    await saveData('folders', folders);
   }
 }
 
 async function saveInvoice(invoice) {
-  try {
-    await fetch('/api/invoices', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(invoice)
-    });
-    await loadInvoices();
-    updateInvoiceStats();
-    renderInvoices();
-    return true;
-  } catch (err) {
-    console.error('Save invoice error:', err);
-    invoices.push(invoice);
-    updateInvoiceStats();
-    renderInvoices();
-    return true;
+  invoices.push(invoice);
+  await saveData('invoices', invoices);
+  await loadInvoices();
+  updateInvoiceStats();
+  renderInvoices();
+  return true;
+}
+
+async function saveFolder(folder) {
+  folders.push(folder);
+  await saveData('folders', folders);
+  renderFolders();
+  return true;
+}
+
+// Find or create folder for invoice
+function getOrCreateFolderForDate(date) {
+  const d = new Date(date);
+  const year = d.getFullYear().toString();
+  const monthName = d.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+  
+  // Find year folder
+  let yearFolder = folders.find(f => f.name === year && !f.parent);
+  if (!yearFolder) {
+    yearFolder = {
+      id: 'folder_year_' + Date.now(),
+      name: year,
+      parent: null,
+      created: new Date().toISOString()
+    };
+    folders.push(yearFolder);
   }
+  
+  // Find month folder
+  let monthFolder = folders.find(f => f.name === monthName && f.parent === yearFolder.id);
+  if (!monthFolder) {
+    monthFolder = {
+      id: 'folder_month_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+      name: monthName,
+      parent: yearFolder.id,
+      created: new Date().toISOString()
+    };
+    folders.push(monthFolder);
+  }
+  
+  return monthFolder.id;
 }
 
 // Calendar building
@@ -847,11 +953,80 @@ function updateInvoiceStats() {
   document.getElementById('totalRevenue').textContent = '€' + total.toFixed(2);
 }
 
+function renderFolders() {
+  const tree = document.getElementById('folderTree');
+  const parentSelect = document.getElementById('parentFolder');
+  const invFolderSelect = document.getElementById('invFolder');
+  
+  const rootFolders = folders.filter(f => !f.parent).sort((a, b) => b.name.localeCompare(a.name));
+  
+  let html = `
+    <div class="folder ${currentFolder === null ? 'active' : ''}" data-folder="">
+      <span class="folder-icon">📋</span>
+      <span class="folder-name">Alle Rechnungen</span>
+      <span class="folder-count">${invoices.length}</span>
+    </div>
+  `;
+  
+  rootFolders.forEach(folder => {
+    const count = invoices.filter(inv => inv.folder === folder.id).length;
+    const children = folders.filter(f => f.parent === folder.id);
+    
+    html += `
+      <div class="folder ${currentFolder === folder.id ? 'active' : ''}" data-folder="${folder.id}">
+        <span class="folder-icon">📁</span>
+        <span class="folder-name">${folder.name}</span>
+        <span class="folder-count">${count}</span>
+      </div>
+    `;
+    
+    children.forEach(child => {
+      const childCount = invoices.filter(inv => inv.folder === child.id).length;
+      html += `
+        <div class="folder ${currentFolder === child.id ? 'active' : ''}" data-folder="${child.id}" style="margin-left:30px">
+          <span class="folder-icon">📂</span>
+          <span class="folder-name">${child.name}</span>
+          <span class="folder-count">${childCount}</span>
+        </div>
+      `;
+    });
+  });
+  
+  tree.innerHTML = html;
+  
+  // Update parent select
+  parentSelect.innerHTML = '<option value="">Hauptverzeichnis / Root</option>' +
+    folders.map(f => `<option value="${f.id}">${f.name}${f.parent ? ' (Unterordner)' : ''}</option>`).join('');
+  
+  // Update invoice folder select
+  invFolderSelect.innerHTML = '<option value="">Automatisch (Jahr/Monat)</option>';
+  rootFolders.forEach(folder => {
+    invFolderSelect.innerHTML += `<option value="${folder.id}">${folder.name}</option>`;
+    const children = folders.filter(f => f.parent === folder.id);
+    children.forEach(child => {
+      invFolderSelect.innerHTML += `<option value="${child.id}">  └─ ${child.name}</option>`;
+    });
+  });
+  
+  // Add click handlers
+  tree.querySelectorAll('.folder').forEach(el => {
+    el.addEventListener('click', () => {
+      currentFolder = el.dataset.folder || null;
+      renderFolders();
+      renderInvoices();
+    });
+  });
+}
+
 function renderInvoices() {
   const list = document.getElementById('invoiceList');
   const search = document.getElementById('searchInput').value.toLowerCase();
   
   let filtered = invoices;
+  
+  if (currentFolder) {
+    filtered = filtered.filter(inv => inv.folder === currentFolder);
+  }
   
   if (search) {
     filtered = filtered.filter(inv => 
@@ -870,13 +1045,13 @@ function renderInvoices() {
   
   list.innerHTML = filtered.map(inv => `
     <div class="invoice-item">
-      <div>
-        <span class="invoice-number">#${inv.number}</span>
+      <div class="invoice-number">#${inv.number}</div>
+      <div class="invoice-details">
         <div class="invoice-guest">${inv.guest}</div>
         <div class="invoice-date">${formatDateEU(inv.date)} • ${inv.nights} Nächte</div>
-        <span class="invoice-status ${inv.status}">${inv.status === 'paid' ? 'Bezahlt' : 'Offen'}</span>
       </div>
       <div class="invoice-amount">€${parseFloat(inv.total).toFixed(2)}</div>
+      <span class="invoice-status ${inv.status}">${inv.status === 'paid' ? 'Bezahlt' : 'Offen'}</span>
     </div>
   `).join('');
 }
@@ -885,6 +1060,7 @@ function openInvoiceModal(booking = null) {
   document.getElementById('invoiceOverlay').style.display = 'flex';
   
   if (booking) {
+    // Daten vom Gast übernehmen
     document.getElementById('invGuest').value = booking.guest || '';
     document.getElementById('invEmail').value = booking.email || '';
     document.getElementById('invPhone').value = booking.phone || '';
@@ -893,6 +1069,15 @@ function openInvoiceModal(booking = null) {
     document.getElementById('invCheckout').value = booking.end || '';
     document.getElementById('invAdults').value = booking.adults || 2;
     document.getElementById('invChildren').value = booking.children || 0;
+    
+    // Betrag in erste Position eintragen
+    if (booking.amount) {
+      const container = document.getElementById('itemsContainer');
+      const firstRow = container.querySelector('.item-row');
+      if (firstRow) {
+        firstRow.querySelector('.item-price').value = booking.amount;
+      }
+    }
   } else {
     document.getElementById('invGuest').value = '';
     document.getElementById('invEmail').value = '';
@@ -908,12 +1093,14 @@ function openInvoiceModal(booking = null) {
   document.getElementById('invDeposit').value = '0';
   document.getElementById('invDepositPaid').value = 'false';
   document.getElementById('invNotes').value = '';
+  document.getElementById('invFolder').value = '';
   
+  // Reset items
   document.getElementById('itemsContainer').innerHTML = `
     <div class="item-row">
       <input type="text" placeholder="Beschreibung" class="item-desc" value="Appartment Bischof" />
       <input type="number" placeholder="Menge" class="item-qty" value="1" min="1" />
-      <input type="number" placeholder="Preis" class="item-price" step="0.01" />
+      <input type="number" placeholder="Preis" class="item-price" step="0.01" value="${booking && booking.amount ? booking.amount : ''}" />
       <input type="text" readonly class="item-total" placeholder="Summe" />
       <button class="remove-item" onclick="removeInvoiceItem(this)">✕</button>
     </div>
@@ -985,7 +1172,7 @@ function removeInvoiceItem(btn) {
 }
 
 async function saveInvoiceFromModal() {
-  const guest = document.getElementById('invGuest').value;
+  const guest = document.getElementById('invGuest').value.trim();
   if (!guest) {
     alert('Bitte Gast eingeben');
     return;
@@ -1028,6 +1215,18 @@ async function saveInvoiceFromModal() {
   const year = date.getFullYear().toString().slice(-2);
   const number = `${nextInvoiceNumber}/${year}`;
   
+  // Folder handling
+  let selectedFolder = document.getElementById('invFolder').value;
+  let folderId;
+  
+  if (selectedFolder) {
+    folderId = selectedFolder;
+  } else {
+    // Automatisch Jahr/Monat Ordner erstellen
+    folderId = getOrCreateFolderForDate(date);
+    await saveData('folders', folders);
+  }
+  
   const invoice = {
     id: 'invoice_' + Date.now(),
     number: number,
@@ -1051,15 +1250,53 @@ async function saveInvoiceFromModal() {
     balance: balance,
     status: depositPaid && deposit >= total ? 'paid' : 'pending',
     notes: document.getElementById('invNotes').value,
+    folder: folderId,
     created: new Date().toISOString()
   };
+  
+  // Generate PDF filename
+  const pdfFilename = `${guest.replace(/\s+/g, '_')}_${number.replace('/', '_')}.pdf`;
+  invoice.pdfFilename = pdfFilename;
   
   const success = await saveInvoice(invoice);
   if (success) {
     nextInvoiceNumber++;
-    alert('✅ Rechnung gespeichert!\n#' + number);
+    renderFolders();
+    alert(`✅ Rechnung gespeichert!\n\n#${number}\nPDF: ${pdfFilename}\n\nDie Rechnung wurde im Ordner gespeichert und kann per E-Mail versendet werden.`);
     closeInvoiceModal();
   }
+}
+
+// Folder functions
+function openFolderModal() {
+  document.getElementById('folderOverlay').style.display = 'flex';
+  document.getElementById('folderName').value = '';
+  document.getElementById('parentFolder').value = '';
+}
+
+function closeFolderModal() {
+  document.getElementById('folderOverlay').style.display = 'none';
+}
+
+async function saveFolderFromModal() {
+  const name = document.getElementById('folderName').value.trim();
+  if (!name) {
+    alert('Bitte Ordnername eingeben');
+    return;
+  }
+  
+  const parent = document.getElementById('parentFolder').value || null;
+  
+  const folder = {
+    id: 'folder_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+    name: name,
+    parent: parent,
+    created: new Date().toISOString()
+  };
+  
+  await saveFolder(folder);
+  closeFolderModal();
+  alert('✅ Ordner erstellt!');
 }
 
 // Event listeners
@@ -1141,8 +1378,14 @@ document.getElementById('deleteBtn').addEventListener('click', async () => {
 
 document.getElementById('generateInvoiceBtn').addEventListener('click', () => {
   closeBookingModal();
-  openInvoiceModal(currentBooking);
+  
+  // Switch to invoices page
   document.querySelector('.nav-tab[data-page="invoices"]').click();
+  
+  // Open invoice modal with booking data
+  setTimeout(() => {
+    openInvoiceModal(currentBooking);
+  }, 100);
 });
 
 document.getElementById('createInvoiceBtn').addEventListener('click', () => openInvoiceModal());
@@ -1153,6 +1396,14 @@ document.getElementById('invoiceOverlay').addEventListener('click', e => {
 });
 
 document.getElementById('saveInvoiceBtn').addEventListener('click', saveInvoiceFromModal);
+
+document.getElementById('createFolderBtn').addEventListener('click', openFolderModal);
+document.getElementById('closeFolderModal').addEventListener('click', closeFolderModal);
+document.getElementById('cancelFolderBtn').addEventListener('click', closeFolderModal);
+document.getElementById('saveFolderBtn').addEventListener('click', saveFolderFromModal);
+document.getElementById('folderOverlay').addEventListener('click', e => {
+  if (e.target.id === 'folderOverlay') closeFolderModal();
+});
 
 document.getElementById('searchInput').addEventListener('input', renderInvoices);
 
@@ -1167,14 +1418,19 @@ document.addEventListener('input', (e) => {
 });
 
 // Initialize
-loadBookings().then(() => {
+async function init() {
+  await loadBookings();
+  await loadInvoices();
+  await loadFolders();
+  
   buildMonth(view);
   updateNextAppointment();
-});
-loadInvoices().then(() => {
   updateInvoiceStats();
+  renderFolders();
   renderInvoices();
-});
+}
+
+init();
   </script>
 </body>
 </html>
