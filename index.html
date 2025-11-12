@@ -656,7 +656,31 @@ async function saveData(key, data) {
 
 // API functions
 async function loadBookings() {
-  bookings = await loadData('bookings');
+  // Try to load from localStorage first
+  let localBookings = await loadData('bookings');
+  
+  // Try to load from API (Gmail integration)
+  try {
+    const res = await fetch('/api/bookings');
+    if (res.ok) {
+      const apiBookings = await res.json();
+      // Merge API bookings with local bookings
+      const mergedBookings = [...localBookings];
+      apiBookings.forEach(apiBooking => {
+        if (!mergedBookings.find(b => b.id === apiBooking.id)) {
+          mergedBookings.push(apiBooking);
+        }
+      });
+      bookings = mergedBookings;
+      await saveData('bookings', bookings);
+      return;
+    }
+  } catch (e) {
+    console.log('API not available, using local storage');
+  }
+  
+  // Use local storage data
+  bookings = localBookings;
   if (bookings.length === 0) {
     bookings = [{
       id: '1', guest: 'Test', status: 'pending',
@@ -668,6 +692,71 @@ async function loadBookings() {
     }];
     await saveData('bookings', bookings);
   }
+}
+
+async function loadEmails() {
+  try {
+    const res = await fetch('/api/gmail/fetch');
+    if (res.status === 401) {
+      console.log('Gmail nicht verbunden');
+      displayEmailsPlaceholder();
+      return;
+    }
+    if (res.ok) {
+      emails = await res.json();
+      displayEmails();
+      return;
+    }
+  } catch (e) {
+    console.log('Gmail API nicht verfügbar');
+  }
+  displayEmailsPlaceholder();
+}
+
+function displayEmails() {
+  const emailList = document.getElementById('emailList');
+  const emailCount = document.getElementById('emailCount');
+  
+  if (!emails || emails.length === 0) {
+    emailList.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px">Keine E-Mails geladen</div>';
+    emailCount.textContent = '0';
+    return;
+  }
+
+  emailCount.textContent = emails.length;
+
+  emailList.innerHTML = emails.map(email => {
+    const assigned = email.booking_id ? 'assigned' : '';
+    const booking = bookings.find(b => b.id === email.booking_id);
+    const badge = booking ? `<span style="padding:4px 8px;border-radius:999px;font-size:11px;background:#dcfce7;color:#16a34a;font-weight:700">📎 ${booking.guest}</span>` : '';
+    
+    return `
+      <div class="email-item ${assigned}" style="cursor:pointer">
+        <div style="font-weight:700;font-size:14px;margin-bottom:4px">${email.from || 'Unbekannt'}</div>
+        <div style="font-size:13px;color:#64748b;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${email.subject || '(Kein Betreff)'}</div>
+        <div style="font-size:12px;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${email.body || ''}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid #eef0f4">
+          <span style="font-size:11px;color:#94a3b8">${email.date || ''}</span>
+          ${badge}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function displayEmailsPlaceholder() {
+  const emailList = document.getElementById('emailList');
+  const emailCount = document.getElementById('emailCount');
+  
+  emailCount.textContent = '0';
+  emailList.innerHTML = `
+    <div style="text-align:center;color:var(--muted);padding:20px">
+      <div style="font-size:48px;margin-bottom:12px">📧</div>
+      <div style="font-weight:600;margin-bottom:8px">Gmail nicht verbunden</div>
+      <div style="font-size:14px;margin-bottom:16px">Verbinden Sie Ihr Gmail-Konto um E-Mails zu sehen</div>
+      <button class="btn small" onclick="window.location.href='/api/gmail/auth'" style="margin:0 auto">Gmail verbinden</button>
+    </div>
+  `;
 }
 
 async function saveBooking(booking) {
@@ -1044,7 +1133,7 @@ function renderInvoices() {
   }
   
   list.innerHTML = filtered.map(inv => `
-    <div class="invoice-item">
+    <div class="invoice-item" data-invoice-id="${inv.id}">
       <div class="invoice-number">#${inv.number}</div>
       <div class="invoice-details">
         <div class="invoice-guest">${inv.guest}</div>
@@ -1054,12 +1143,39 @@ function renderInvoices() {
       <span class="invoice-status ${inv.status}">${inv.status === 'paid' ? 'Bezahlt' : 'Offen'}</span>
     </div>
   `).join('');
+  
+  // Add click handlers to open invoice details
+  list.querySelectorAll('.invoice-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const invoiceId = item.dataset.invoiceId;
+      const invoice = invoices.find(inv => inv.id === invoiceId);
+      if (invoice) {
+        viewInvoiceDetails(invoice);
+      }
+    });
+  });
+}
+
+function viewInvoiceDetails(invoice) {
+  alert(`Rechnung #${invoice.number}\n\nGast: ${invoice.guest}\nDatum: ${formatDateEU(invoice.date)}\nBetrag: €${invoice.total.toFixed(2)}\nStatus: ${invoice.status === 'paid' ? 'Bezahlt' : 'Offen'}\n\nPDF: ${invoice.pdfFilename || 'N/A'}`);
 }
 
 function openInvoiceModal(booking = null) {
   document.getElementById('invoiceOverlay').style.display = 'flex';
   
+  // Reset items first
+  document.getElementById('itemsContainer').innerHTML = `
+    <div class="item-row">
+      <input type="text" placeholder="Beschreibung" class="item-desc" value="Appartment Bischof" />
+      <input type="number" placeholder="Menge" class="item-qty" value="1" min="1" />
+      <input type="number" placeholder="Preis" class="item-price" step="0.01" />
+      <input type="text" readonly class="item-total" placeholder="Summe" />
+      <button class="remove-item" onclick="removeInvoiceItem(this)">✕</button>
+    </div>
+  `;
+  
   if (booking) {
+    console.log('Opening invoice with booking:', booking);
     // Daten vom Gast übernehmen
     document.getElementById('invGuest').value = booking.guest || '';
     document.getElementById('invEmail').value = booking.email || '';
@@ -1070,14 +1186,17 @@ function openInvoiceModal(booking = null) {
     document.getElementById('invAdults').value = booking.adults || 2;
     document.getElementById('invChildren').value = booking.children || 0;
     
-    // Betrag in erste Position eintragen
-    if (booking.amount) {
-      const container = document.getElementById('itemsContainer');
-      const firstRow = container.querySelector('.item-row');
-      if (firstRow) {
-        firstRow.querySelector('.item-price').value = booking.amount;
+    // Betrag in erste Position eintragen - nach kurzer Verzögerung
+    setTimeout(() => {
+      if (booking.amount) {
+        const firstRow = document.querySelector('.item-row');
+        if (firstRow) {
+          const priceInput = firstRow.querySelector('.item-price');
+          priceInput.value = booking.amount;
+          autoCalculateInvoice();
+        }
       }
-    }
+    }, 50);
   } else {
     document.getElementById('invGuest').value = '';
     document.getElementById('invEmail').value = '';
@@ -1094,17 +1213,6 @@ function openInvoiceModal(booking = null) {
   document.getElementById('invDepositPaid').value = 'false';
   document.getElementById('invNotes').value = '';
   document.getElementById('invFolder').value = '';
-  
-  // Reset items
-  document.getElementById('itemsContainer').innerHTML = `
-    <div class="item-row">
-      <input type="text" placeholder="Beschreibung" class="item-desc" value="Appartment Bischof" />
-      <input type="number" placeholder="Menge" class="item-qty" value="1" min="1" />
-      <input type="number" placeholder="Preis" class="item-price" step="0.01" value="${booking && booking.amount ? booking.amount : ''}" />
-      <input type="text" readonly class="item-total" placeholder="Summe" />
-      <button class="remove-item" onclick="removeInvoiceItem(this)">✕</button>
-    </div>
-  `;
   
   autoCalculateInvoice();
 }
@@ -1377,15 +1485,32 @@ document.getElementById('deleteBtn').addEventListener('click', async () => {
 });
 
 document.getElementById('generateInvoiceBtn').addEventListener('click', () => {
+  console.log('Generate invoice clicked, current booking:', currentBooking);
   closeBookingModal();
   
   // Switch to invoices page
   document.querySelector('.nav-tab[data-page="invoices"]').click();
   
-  // Open invoice modal with booking data
+  // Open invoice modal with booking data after short delay
   setTimeout(() => {
-    openInvoiceModal(currentBooking);
-  }, 100);
+    if (currentBooking) {
+      openInvoiceModal(currentBooking);
+    } else {
+      openInvoiceModal();
+    }
+  }, 150);
+});
+
+document.getElementById('syncEmailsBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('syncEmailsBtn');
+  const originalText = btn.textContent;
+  btn.textContent = '⏳ Lade...';
+  btn.disabled = true;
+  
+  await loadEmails();
+  
+  btn.textContent = originalText;
+  btn.disabled = false;
 });
 
 document.getElementById('createInvoiceBtn').addEventListener('click', () => openInvoiceModal());
@@ -1419,9 +1544,14 @@ document.addEventListener('input', (e) => {
 
 // Initialize
 async function init() {
+  console.log('Initializing app...');
+  
   await loadBookings();
   await loadInvoices();
   await loadFolders();
+  await loadEmails();
+  
+  console.log('Loaded:', bookings.length, 'bookings,', invoices.length, 'invoices,', folders.length, 'folders');
   
   buildMonth(view);
   updateNextAppointment();
