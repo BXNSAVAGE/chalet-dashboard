@@ -667,4 +667,514 @@ async function saveInvoice(invoice) {
 // Calendar building
 function buildMonth(date) {
   const calGrid = document.getElementById('calGrid');
-  if
+  if (!calGrid) return;
+
+  calGrid.innerHTML = '';
+  const y = date.getFullYear();
+  const m = date.getMonth();
+  const first = new Date(y, m, 1);
+  const startOffset = (first.getDay() + 6) % 7;
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+
+  document.getElementById('calTitle').textContent = first.toLocaleDateString('de-AT', { month: 'long', year: 'numeric' });
+
+  const dows = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
+  dows.forEach(txt => {
+    const el = document.createElement('div');
+    el.className = 'dow';
+    el.textContent = txt;
+    calGrid.appendChild(el);
+  });
+
+  for (let i = 0; i < startOffset; i++) {
+    const empty = document.createElement('div');
+    empty.className = 'cell';
+    calGrid.appendChild(empty);
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    const dateLabel = document.createElement('span');
+    dateLabel.className = 'date';
+    dateLabel.textContent = d;
+    cell.appendChild(dateLabel);
+    cell.dataset.date = `${y}-${pad(m + 1)}-${pad(d)}`;
+    calGrid.appendChild(cell);
+  }
+
+  const cellByDate = {};
+  document.querySelectorAll('.cell[data-date]').forEach(c => {
+    cellByDate[c.dataset.date] = c;
+  });
+
+  function eachDate(fromISO, toISO) {
+    const out = [];
+    let d = new Date(fromISO + 'T00:00:00');
+    const end = new Date(toISO + 'T00:00:00');
+    while (d <= end) {
+      out.push(iso(d));
+      d.setDate(d.getDate() + 1);
+    }
+    return out;
+  }
+
+  bookings.forEach(b => {
+    const dates = eachDate(b.start, b.end);
+    const bookingColor = getBookingColor(b.guest);
+    dates.forEach((dayIso) => {
+      const cell = cellByDate[dayIso];
+      if (!cell) return;
+      const seg = document.createElement('div');
+      seg.className = 'seg ' + (b.status === 'confirm' ? 'confirm' : 'pending');
+      seg.style.backgroundColor = bookingColor;
+      seg.innerHTML = `${b.guest}`;
+      seg.addEventListener('click', () => openBookingModal(b));
+      cell.appendChild(seg);
+    });
+  });
+}
+
+function updateNextAppointment() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const upcoming = bookings
+    .filter(b => {
+      const start = new Date(b.start);
+      start.setHours(0, 0, 0, 0);
+      return start >= today;
+    })
+    .sort((a, b) => new Date(a.start) - new Date(b.start));
+  
+  const widget = document.getElementById('nextAppointment');
+  if (!widget) return;
+  
+  if (upcoming.length > 0) {
+    const next = upcoming[0];
+    const startDate = new Date(next.start);
+    const isToday = startDate.getTime() === today.getTime();
+    
+    widget.innerHTML = `
+      <div>
+        <div style="color:var(--muted);font-size:14px">${next.guest} — ${isToday ? 'Heute' : formatDateEU(next.start)} Anreise</div>
+      </div>
+      <span class="tag ${next.status}">${next.status === 'confirm' ? 'BESTÄTIGT' : 'AUSSTEHEND'}</span>
+    `;
+    
+    widget.style.cursor = 'pointer';
+    widget.onclick = () => {
+      const bookingDate = new Date(next.start);
+      view = new Date(bookingDate.getFullYear(), bookingDate.getMonth(), 1);
+      buildMonth(view);
+    };
+  } else {
+    widget.innerHTML = `
+      <div>
+        <div style="color:var(--muted);font-size:14px">Keine bevorstehenden Buchungen</div>
+      </div>
+      <span class="tag confirm">—</span>
+    `;
+    widget.style.cursor = 'default';
+    widget.onclick = null;
+  }
+}
+
+// Booking modal
+function openBookingModal(b) {
+  currentBooking = b;
+  isNewBooking = false;
+  document.getElementById('bookingOverlay').style.display = 'flex';
+  
+  document.getElementById('mTitle').textContent = b.guest || 'Buchung';
+  document.getElementById('mGuest').value = b.guest || '';
+  document.getElementById('mStatus').value = b.status || 'pending';
+  document.getElementById('mStart').value = b.start || '';
+  document.getElementById('mEnd').value = b.end || '';
+  document.getElementById('mEmail').value = b.email || '';
+  document.getElementById('mPhone').value = b.phone || '';
+  document.getElementById('mAddress').value = b.address || '';
+  document.getElementById('mAdults').value = b.adults || 2;
+  document.getElementById('mChildren').value = b.children || 0;
+  document.getElementById('mAmount').value = b.amount || '';
+  document.getElementById('mDeposit').value = b.depositAmount || '';
+  document.getElementById('mNotes').value = b.notes || '';
+
+  document.getElementById('deleteBtn').style.display = b.id ? 'inline-flex' : 'none';
+  document.getElementById('generateInvoiceBtn').style.display = 'inline-flex';
+}
+
+function openNewBookingModal() {
+  currentBooking = null;
+  isNewBooking = true;
+  document.getElementById('bookingOverlay').style.display = 'flex';
+  
+  document.getElementById('mTitle').textContent = 'Neue Buchung';
+  document.getElementById('mGuest').value = '';
+  document.getElementById('mStatus').value = 'pending';
+  document.getElementById('mStart').value = '';
+  document.getElementById('mEnd').value = '';
+  document.getElementById('mEmail').value = '';
+  document.getElementById('mPhone').value = '';
+  document.getElementById('mAddress').value = '';
+  document.getElementById('mAdults').value = '2';
+  document.getElementById('mChildren').value = '0';
+  document.getElementById('mAmount').value = '';
+  document.getElementById('mDeposit').value = '';
+  document.getElementById('mNotes').value = '';
+
+  document.getElementById('deleteBtn').style.display = 'none';
+  document.getElementById('generateInvoiceBtn').style.display = 'none';
+}
+
+function closeBookingModal() {
+  document.getElementById('bookingOverlay').style.display = 'none';
+  currentBooking = null;
+  isNewBooking = false;
+}
+
+// Invoice functions
+function updateInvoiceStats() {
+  document.getElementById('totalInvoices').textContent = invoices.length;
+  
+  const pending = invoices.filter(inv => inv.status === 'pending').length;
+  const paid = invoices.filter(inv => inv.status === 'paid').length;
+  
+  document.getElementById('pendingInvoices').textContent = pending;
+  document.getElementById('paidInvoices').textContent = paid;
+  
+  const total = invoices.reduce((sum, inv) => sum + parseFloat(inv.total || 0), 0);
+  document.getElementById('totalRevenue').textContent = '€' + total.toFixed(2);
+}
+
+function renderInvoices() {
+  const list = document.getElementById('invoiceList');
+  const search = document.getElementById('searchInput').value.toLowerCase();
+  
+  let filtered = invoices;
+  
+  if (search) {
+    filtered = filtered.filter(inv => 
+      inv.number.toLowerCase().includes(search) ||
+      inv.guest.toLowerCase().includes(search) ||
+      inv.total.toString().includes(search)
+    );
+  }
+  
+  filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+  
+  if (filtered.length === 0) {
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8">Keine Rechnungen gefunden</div>';
+    return;
+  }
+  
+  list.innerHTML = filtered.map(inv => `
+    <div class="invoice-item">
+      <div>
+        <span class="invoice-number">#${inv.number}</span>
+        <div class="invoice-guest">${inv.guest}</div>
+        <div class="invoice-date">${formatDateEU(inv.date)} • ${inv.nights} Nächte</div>
+        <span class="invoice-status ${inv.status}">${inv.status === 'paid' ? 'Bezahlt' : 'Offen'}</span>
+      </div>
+      <div class="invoice-amount">€${parseFloat(inv.total).toFixed(2)}</div>
+    </div>
+  `).join('');
+}
+
+function openInvoiceModal(booking = null) {
+  document.getElementById('invoiceOverlay').style.display = 'flex';
+  
+  if (booking) {
+    document.getElementById('invGuest').value = booking.guest || '';
+    document.getElementById('invEmail').value = booking.email || '';
+    document.getElementById('invPhone').value = booking.phone || '';
+    document.getElementById('invAddress').value = booking.address || '';
+    document.getElementById('invCheckin').value = booking.start || '';
+    document.getElementById('invCheckout').value = booking.end || '';
+    document.getElementById('invAdults').value = booking.adults || 2;
+    document.getElementById('invChildren').value = booking.children || 0;
+  } else {
+    document.getElementById('invGuest').value = '';
+    document.getElementById('invEmail').value = '';
+    document.getElementById('invPhone').value = '';
+    document.getElementById('invAddress').value = '';
+    document.getElementById('invCheckin').value = '';
+    document.getElementById('invCheckout').value = '';
+    document.getElementById('invAdults').value = '2';
+    document.getElementById('invChildren').value = '0';
+  }
+  
+  document.getElementById('invDate').valueAsDate = new Date();
+  document.getElementById('invDeposit').value = '0';
+  document.getElementById('invDepositPaid').value = 'false';
+  document.getElementById('invNotes').value = '';
+  
+  document.getElementById('itemsContainer').innerHTML = `
+    <div class="item-row">
+      <input type="text" placeholder="Beschreibung" class="item-desc" value="Appartment Bischof" />
+      <input type="number" placeholder="Menge" class="item-qty" value="1" min="1" />
+      <input type="number" placeholder="Preis" class="item-price" step="0.01" />
+      <input type="text" readonly class="item-total" placeholder="Summe" />
+      <button class="remove-item" onclick="removeInvoiceItem(this)">✕</button>
+    </div>
+  `;
+  
+  autoCalculateInvoice();
+}
+
+function closeInvoiceModal() {
+  document.getElementById('invoiceOverlay').style.display = 'none';
+}
+
+function autoCalculateInvoice() {
+  const checkin = document.getElementById('invCheckin').value;
+  const checkout = document.getElementById('invCheckout').value;
+  const adults = parseInt(document.getElementById('invAdults').value) || 0;
+  const deposit = parseFloat(document.getElementById('invDeposit').value) || 0;
+  const depositPaid = document.getElementById('invDepositPaid').value === 'true';
+  
+  const nights = calculateNights(checkin, checkout);
+  const tax = nights * adults * 5;
+  const cleaning = 70;
+  
+  let subtotal = 0;
+  document.querySelectorAll('.item-row').forEach(row => {
+    const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+    const price = parseFloat(row.querySelector('.item-price').value) || 0;
+    const total = qty * price;
+    row.querySelector('.item-total').value = total.toFixed(2);
+    subtotal += total;
+  });
+  
+  const total = subtotal + tax + cleaning;
+  const balance = depositPaid ? (total - deposit) : total;
+  
+  document.getElementById('calcSubtotal').textContent = '€' + subtotal.toFixed(2);
+  document.getElementById('calcTax').textContent = '€' + tax.toFixed(2) + ` (${nights}N × ${adults}P × €5)`;
+  document.getElementById('calcCleaning').textContent = '€' + cleaning.toFixed(2);
+  document.getElementById('calcTotal').textContent = '€' + total.toFixed(2);
+  document.getElementById('calcDepositDisplay').textContent = depositPaid ? '-€' + deposit.toFixed(2) : '€' + deposit.toFixed(2) + ' (ausstehend)';
+  document.getElementById('calcBalance').textContent = '€' + balance.toFixed(2);
+}
+
+function addInvoiceItem() {
+  const container = document.getElementById('itemsContainer');
+  const row = document.createElement('div');
+  row.className = 'item-row';
+  row.innerHTML = `
+    <input type="text" placeholder="Beschreibung" class="item-desc" />
+    <input type="number" placeholder="Menge" class="item-qty" value="1" min="1" />
+    <input type="number" placeholder="Preis" class="item-price" step="0.01" />
+    <input type="text" readonly class="item-total" placeholder="Summe" />
+    <button class="remove-item" onclick="removeInvoiceItem(this)">✕</button>
+  `;
+  container.appendChild(row);
+  
+  row.querySelectorAll('input').forEach(input => {
+    input.addEventListener('input', autoCalculateInvoice);
+  });
+  
+  autoCalculateInvoice();
+}
+
+function removeInvoiceItem(btn) {
+  if (document.querySelectorAll('.item-row').length > 1) {
+    btn.closest('.item-row').remove();
+    autoCalculateInvoice();
+  }
+}
+
+async function saveInvoiceFromModal() {
+  const guest = document.getElementById('invGuest').value;
+  if (!guest) {
+    alert('Bitte Gast eingeben');
+    return;
+  }
+  
+  const checkin = document.getElementById('invCheckin').value;
+  const checkout = document.getElementById('invCheckout').value;
+  if (!checkin || !checkout) {
+    alert('Bitte Check-in und Check-out Datum eingeben');
+    return;
+  }
+  
+  const items = [];
+  document.querySelectorAll('.item-row').forEach(row => {
+    const desc = row.querySelector('.item-desc').value;
+    const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+    const price = parseFloat(row.querySelector('.item-price').value) || 0;
+    if (desc && qty > 0 && price > 0) {
+      items.push({ description: desc, quantity: qty, price: price, total: qty * price });
+    }
+  });
+  
+  if (items.length === 0) {
+    alert('Bitte mindestens eine Position hinzufügen');
+    return;
+  }
+  
+  const adults = parseInt(document.getElementById('invAdults').value) || 0;
+  const children = parseInt(document.getElementById('invChildren').value) || 0;
+  const nights = calculateNights(checkin, checkout);
+  const tax = nights * adults * 5;
+  const cleaning = 70;
+  const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+  const total = subtotal + tax + cleaning;
+  const deposit = parseFloat(document.getElementById('invDeposit').value) || 0;
+  const depositPaid = document.getElementById('invDepositPaid').value === 'true';
+  const balance = depositPaid ? (total - deposit) : total;
+  
+  const date = new Date(document.getElementById('invDate').value);
+  const year = date.getFullYear().toString().slice(-2);
+  const number = `${nextInvoiceNumber}/${year}`;
+  
+  const invoice = {
+    id: 'invoice_' + Date.now(),
+    number: number,
+    date: document.getElementById('invDate').value,
+    guest: guest,
+    email: document.getElementById('invEmail').value,
+    phone: document.getElementById('invPhone').value,
+    address: document.getElementById('invAddress').value,
+    checkin: checkin,
+    checkout: checkout,
+    nights: nights,
+    adults: adults,
+    children: children,
+    items: items,
+    subtotal: subtotal,
+    tax: tax,
+    cleaning: cleaning,
+    total: total,
+    deposit: deposit,
+    depositPaid: depositPaid,
+    balance: balance,
+    status: depositPaid && deposit >= total ? 'paid' : 'pending',
+    notes: document.getElementById('invNotes').value,
+    created: new Date().toISOString()
+  };
+  
+  const success = await saveInvoice(invoice);
+  if (success) {
+    nextInvoiceNumber++;
+    alert('✅ Rechnung gespeichert!\n#' + number);
+    closeInvoiceModal();
+  }
+}
+
+// Event listeners
+document.querySelectorAll('.nav-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById(tab.dataset.page + 'Page').classList.add('active');
+  });
+});
+
+document.getElementById('addBookingBtn').addEventListener('click', openNewBookingModal);
+document.getElementById('mClose').addEventListener('click', closeBookingModal);
+document.getElementById('bookingOverlay').addEventListener('click', e => {
+  if (e.target.id === 'bookingOverlay') closeBookingModal();
+});
+
+document.getElementById('prevBtn').addEventListener('click', () => {
+  view.setMonth(view.getMonth() - 1);
+  buildMonth(view);
+});
+
+document.getElementById('nextBtn').addEventListener('click', () => {
+  view.setMonth(view.getMonth() + 1);
+  buildMonth(view);
+});
+
+document.getElementById('todayBtn').addEventListener('click', () => {
+  view = new Date();
+  buildMonth(view);
+});
+
+document.getElementById('saveBtn').addEventListener('click', async () => {
+  const bookingData = {
+    guest: document.getElementById('mGuest').value,
+    status: document.getElementById('mStatus').value,
+    email: document.getElementById('mEmail').value,
+    phone: document.getElementById('mPhone').value,
+    address: document.getElementById('mAddress').value,
+    start: document.getElementById('mStart').value,
+    end: document.getElementById('mEnd').value,
+    adults: parseInt(document.getElementById('mAdults').value) || 2,
+    children: parseInt(document.getElementById('mChildren').value) || 0,
+    amount: document.getElementById('mAmount').value,
+    depositAmount: document.getElementById('mDeposit').value,
+    notes: document.getElementById('mNotes').value
+  };
+
+  if (!bookingData.guest || !bookingData.start || !bookingData.end) {
+    alert('Bitte alle Pflichtfelder ausfüllen');
+    return;
+  }
+
+  if (isNewBooking) {
+    bookingData.id = 'booking_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  } else if (currentBooking && currentBooking.id) {
+    bookingData.id = currentBooking.id;
+  }
+
+  const success = await saveBooking(bookingData);
+  if (success) {
+    alert('✅ Buchung gespeichert!');
+    closeBookingModal();
+  }
+});
+
+document.getElementById('deleteBtn').addEventListener('click', async () => {
+  if (!currentBooking || !currentBooking.id) return;
+  if (!confirm(`Buchung von ${currentBooking.guest} wirklich löschen?`)) return;
+
+  const success = await deleteBooking(currentBooking.id);
+  if (success) {
+    alert('✅ Buchung gelöscht!');
+    closeBookingModal();
+  }
+});
+
+document.getElementById('generateInvoiceBtn').addEventListener('click', () => {
+  closeBookingModal();
+  openInvoiceModal(currentBooking);
+  document.querySelector('.nav-tab[data-page="invoices"]').click();
+});
+
+document.getElementById('createInvoiceBtn').addEventListener('click', () => openInvoiceModal());
+document.getElementById('closeInvoiceModal').addEventListener('click', closeInvoiceModal);
+document.getElementById('cancelInvoiceBtn').addEventListener('click', closeInvoiceModal);
+document.getElementById('invoiceOverlay').addEventListener('click', e => {
+  if (e.target.id === 'invoiceOverlay') closeInvoiceModal();
+});
+
+document.getElementById('saveInvoiceBtn').addEventListener('click', saveInvoiceFromModal);
+
+document.getElementById('searchInput').addEventListener('input', renderInvoices);
+
+['invCheckin', 'invCheckout', 'invAdults', 'invDeposit', 'invDepositPaid'].forEach(id => {
+  document.getElementById(id).addEventListener('change', autoCalculateInvoice);
+});
+
+document.addEventListener('input', (e) => {
+  if (e.target.classList.contains('item-qty') || e.target.classList.contains('item-price')) {
+    autoCalculateInvoice();
+  }
+});
+
+// Initialize
+loadBookings().then(() => {
+  buildMonth(view);
+  updateNextAppointment();
+});
+loadInvoices().then(() => {
+  updateInvoiceStats();
+  renderInvoices();
+});
+  </script>
+</body>
+</html>
