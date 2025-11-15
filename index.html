@@ -1,823 +1,4 @@
-function closeBookingModal() {
-  document.getElementById('bookingOverlay').style.display = 'none';
-  currentBooking = null;
-  isNewBooking = false;
-}
-
-function updateBookingEmails() {
-  if (!currentBooking) return;
-  
-  const bookingEmailsList = emails.filter(e => e.booking_id === currentBooking.id);
-  const container = document.getElementById('bookingEmails');
-  const count = document.getElementById('bookingEmailCount');
-  
-  count.textContent = bookingEmailsList.length;
-  
-  if (bookingEmailsList.length === 0) {
-    container.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px">Keine E-Mails zugewiesen</div>';
-  } else {
-    container.innerHTML = bookingEmailsList.map(email => `
-      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:13px">
-        <div style="font-weight:600;margin-bottom:3px">${email.subject || '(Kein Betreff)'}</div>
-        <div style="color:#94a3b8;font-size:11px">${email.date || ''} - ${email.from || 'Unbekannt'}</div>
-      </div>
-    `).join('');
-  }
-}
-
-// Invoice functions
-function updateInvoiceStats() {
-  document.getElementById('totalInvoices').textContent = invoices.length;
-  
-  const pending = invoices.filter(inv => inv.status === 'pending').length;
-  const paid = invoices.filter(inv => inv.status === 'paid').length;
-  
-  document.getElementById('pendingInvoices').textContent = pending;
-  document.getElementById('paidInvoices').textContent = paid;
-  
-  const total = invoices.reduce((sum, inv) => sum + parseFloat(inv.total || 0), 0);
-  document.getElementById('totalRevenue').textContent = '€' + total.toFixed(2);
-}
-
-function renderFolders() {
-  const tree = document.getElementById('folderTree');
-  const parentSelect = document.getElementById('parentFolder');
-  const invFolderSelect = document.getElementById('invFolder');
-  
-  const rootFolders = folders.filter(f => !f.parent).sort((a, b) => b.name.localeCompare(a.name));
-  
-  let html = `
-    <div class="folder ${currentFolder === null ? 'active' : ''}" data-folder="">
-      <span class="folder-icon">📋</span>
-      <span class="folder-name">Alle Rechnungen</span>
-      <span class="folder-count">${invoices.length}</span>
-    </div>
-  `;
-  
-  rootFolders.forEach(folder => {
-    const count = invoices.filter(inv => inv.folder === folder.id).length;
-    const children = folders.filter(f => f.parent === folder.id);
-    
-    html += `
-      <div class="folder ${currentFolder === folder.id ? 'active' : ''}" data-folder="${folder.id}">
-        <span class="folder-icon">📁</span>
-        <span class="folder-name">${folder.name}</span>
-        <span class="folder-count">${count}</span>
-      </div>
-    `;
-    
-    children.forEach(child => {
-      const childCount = invoices.filter(inv => inv.folder === child.id).length;
-      html += `
-        <div class="folder ${currentFolder === child.id ? 'active' : ''}" data-folder="${child.id}" style="margin-left:30px">
-          <span class="folder-icon">📂</span>
-          <span class="folder-name">${child.name}</span>
-          <span class="folder-count">${childCount}</span>
-        </div>
-      `;
-    });
-  });
-  
-  tree.innerHTML = html;
-  
-  parentSelect.innerHTML = '<option value="">Hauptverzeichnis / Root</option>' +
-    folders.map(f => `<option value="${f.id}">${f.name}${f.parent ? ' (Unterordner)' : ''}</option>`).join('');
-  
-  invFolderSelect.innerHTML = '<option value="">Automatisch (Jahr/Monat)</option>';
-  rootFolders.forEach(folder => {
-    invFolderSelect.innerHTML += `<option value="${folder.id}">${folder.name}</option>`;
-    const children = folders.filter(f => f.parent === folder.id);
-    children.forEach(child => {
-      invFolderSelect.innerHTML += `<option value="${child.id}">  └─ ${child.name}</option>`;
-    });
-  });
-  
-  tree.querySelectorAll('.folder').forEach(el => {
-    el.addEventListener('click', () => {
-      currentFolder = el.dataset.folder || null;
-      renderFolders();
-      renderInvoices();
-    });
-  });
-}
-
-function renderInvoices() {
-  const list = document.getElementById('invoiceList');
-  const search = document.getElementById('searchInput').value.toLowerCase();
-  
-  let filtered = invoices;
-  
-  if (currentFolder) {
-    filtered = filtered.filter(inv => inv.folder === currentFolder);
-  }
-  
-  if (search) {
-    filtered = filtered.filter(inv => 
-      inv.number.toLowerCase().includes(search) ||
-      inv.guest.toLowerCase().includes(search) ||
-      inv.total.toString().includes(search)
-    );
-  }
-  
-  filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
-  
-  if (filtered.length === 0) {
-    list.innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8">Keine Rechnungen gefunden</div>';
-    return;
-  }
-  
-  list.innerHTML = filtered.map(inv => `
-    <div class="invoice-item" data-invoice-id="${inv.id}">
-      <div class="invoice-number">#${inv.number}</div>
-      <div class="invoice-details">
-        <div class="invoice-guest">${inv.guest}</div>
-        <div class="invoice-date">${formatDateEU(inv.date)} • ${inv.nights} Nächte</div>
-      </div>
-      <div class="invoice-amount">€${parseFloat(inv.total).toFixed(2)}</div>
-      <span class="invoice-status ${inv.status}">${inv.status === 'paid' ? 'Bezahlt' : 'Offen'}</span>
-    </div>
-  `).join('');
-  
-  list.querySelectorAll('.invoice-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const invoiceId = item.dataset.invoiceId;
-      const invoice = invoices.find(inv => inv.id === invoiceId);
-      if (invoice) {
-        viewInvoicePreview(invoice);
-      }
-    });
-  });
-}
-
-function viewInvoicePreview(invoice) {
-  currentInvoice = invoice;
-  generateInvoiceHTML(invoice);
-  document.getElementById('invoicePreviewOverlay').style.display = 'flex';
-}
-
-function generateInvoiceHTML(invoice) {
-  const container = document.getElementById('invoicePreviewContent');
-  
-  const html = `
-    <div class="invoice-header">
-      <div>
-        <div class="invoice-logo">🏔️ Haus Bischof</div>
-        <div style="margin-top:8px;color:#64748b;font-size:12px">
-          Hochgastigweg 8<br>
-          6580 St. Anton<br>
-          Tel: +43 680 15 17 973<br>
-          haus.bischof@st-anton.at
-        </div>
-      </div>
-      <div class="invoice-info">
-        <div style="font-size:20px;font-weight:700;margin-bottom:8px">
-          RECHNUNG / INVOICE
-        </div>
-        <div style="margin-bottom:4px">Nr. / No. <strong>${invoice.number}</strong></div>
-        <div>Datum / Date: <strong>${formatDateEU(invoice.date)}</strong></div>
-      </div>
-    </div>
-    
-    <div class="invoice-addresses">
-      <div class="address-block">
-        <h4>Rechnungsadresse / Bill To</h4>
-        <div style="font-weight:600;margin-bottom:4px">${invoice.guest}</div>
-        <div style="white-space:pre-line">${invoice.address || ''}</div>
-        ${invoice.email ? `<div style="margin-top:8px">E-Mail: ${invoice.email}</div>` : ''}
-        ${invoice.phone ? `<div>Tel: ${invoice.phone}</div>` : ''}
-      </div>
-      <div class="address-block">
-        <h4>Aufenthalt / Stay Details</h4>
-        <div><strong>Check-in:</strong> ${formatDateEU(invoice.checkin)}</div>
-        <div><strong>Check-out:</strong> ${formatDateEU(invoice.checkout)}</div>
-        <div><strong>Nächte / Nights:</strong> ${invoice.nights}</div>
-        <div><strong>Gäste / Guests:</strong> ${invoice.adults} Erwachsene${invoice.children > 0 ? `, ${invoice.children} Kinder` : ''}</div>
-      </div>
-    </div>
-    
-    <table class="invoice-table">
-      <thead>
-        <tr>
-          <th>Beschreibung / Description</th>
-          <th style="text-align:center">Menge / Qty</th>
-          <th style="text-align:right">Einzelpreis / Price</th>
-          <th style="text-align:right">Summe / Total</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${invoice.items.map(item => `
-          <tr>
-            <td>${item.description}</td>
-            <td style="text-align:center">${item.quantity}</td>
-            <td style="text-align:right">€${item.price.toFixed(2)}</td>
-            <td style="text-align:right">€${item.total.toFixed(2)}</td>
-          </tr>
-        `).join('')}
-        <tr>
-          <td colspan="3" style="text-align:right;font-weight:600">Zwischensumme / Subtotal:</td>
-          <td style="text-align:right;font-weight:600">€${invoice.subtotal.toFixed(2)}</td>
-        </tr>
-        <tr>
-          <td colspan="3" style="text-align:right">Ortstaxe / Local Tax (${invoice.nights}N × ${invoice.adults}P × €5):</td>
-          <td style="text-align:right">€${invoice.tax.toFixed(2)}</td>
-        </tr>
-        <tr>
-          <td colspan="3" style="text-align:right">Endreinigung / Cleaning Fee:</td>
-          <td style="text-align:right">€${invoice.cleaning.toFixed(2)}</td>
-        </tr>
-        <tr style="background:#f8fafc;font-weight:700;font-size:16px">
-          <td colspan="3" style="text-align:right;padding-top:16px">Gesamtbetrag / Total Amount:</td>
-          <td style="text-align:right;padding-top:16px">€${invoice.total.toFixed(2)}</td>
-        </tr>
-        ${invoice.deposit > 0 ? `
-          <tr style="color:${invoice.depositPaid ? '#16a34a' : '#ea580c'}">
-            <td colspan="3" style="text-align:right">Anzahlung / Deposit ${invoice.depositPaid ? '(bezahlt / paid)' : '(ausstehend / pending)'}:</td>
-            <td style="text-align:right">${invoice.depositPaid ? '-' : ''}€${invoice.deposit.toFixed(2)}</td>
-          </tr>
-          <tr style="background:#eff6ff;font-weight:700;font-size:16px;color:#0a84ff">
-            <td colspan="3" style="text-align:right;padding-top:12px">Restbetrag / Balance Due:</td>
-            <td style="text-align:right;padding-top:12px">€${invoice.balance.toFixed(2)}</td>
-          </tr>
-        ` : ''}
-      </tbody>
-    </table>
-    
-    ${invoice.notes ? `
-      <div style="background:#f8fafc;padding:16px;border-radius:8px;margin:20px 0">
-        <div style="font-weight:600;margin-bottom:8px;color:#64748b">Notizen / Notes:</div>
-        <div style="white-space:pre-line">${invoice.notes}</div>
-      </div>
-    ` : ''}
-    
-    <div style="margin-top:40px;padding-top:20px;border-top:1px solid #e5e7eb;font-size:12px;color:#94a3b8">
-      <div style="font-weight:600;margin-bottom:8px">Zahlungsinformationen / Payment Information:</div>
-      <div>
-        <strong>Empfänger:</strong> MARLIES SIESS<br>
-        <strong>Bank:</strong> RAIFFEISENBANK ARLBERG SILVRETTA<br>
-        <strong>IBAN:</strong> AT71 3624 8000 0096 0757<br>
-        <strong>BIC:</strong> RZTIAT22248
-      </div>
-      <div style="margin-top:16px;font-style:italic">
-        Vielen Dank für Ihre Buchung! / Thank you for your booking!
-      </div>
-    </div>
-  `;
-  
-  container.innerHTML = html;
-}
-
-function closeInvoicePreview() {
-  document.getElementById('invoicePreviewOverlay').style.display = 'none';
-  currentInvoice = null;
-}
-
-function openInvoiceModal(booking = null) {
-  document.getElementById('invoiceOverlay').style.display = 'flex';
-  
-  document.getElementById('itemsContainer').innerHTML = `
-    <div class="item-row">
-      <input type="text" placeholder="Beschreibung" class="item-desc" value="Appartment Bischof" />
-      <input type="number" placeholder="Menge" class="item-qty" value="1" min="1" />
-      <input type="number" placeholder="Preis" class="item-price" step="0.01" />
-      <input type="text" readonly class="item-total" placeholder="Summe" />
-      <button class="remove-item" onclick="removeInvoiceItem(this)">✕</button>
-    </div>
-  `;
-  
-  if (booking) {
-    console.log('Filling invoice form with booking data:', booking);
-    document.getElementById('invGuest').value = booking.guest || '';
-    document.getElementById('invEmail').value = booking.email || '';
-    document.getElementById('invPhone').value = booking.phone || '';
-    document.getElementById('invAddress').value = booking.address || '';
-    document.getElementById('invCheckin').value = booking.start || '';
-    document.getElementById('invCheckout').value = booking.end || '';
-    document.getElementById('invAdults').value = booking.adults || 2;
-    document.getElementById('invChildren').value = booking.children || 0;
-    
-    setTimeout(() => {
-      if (booking.amount) {
-        const firstRow = document.querySelector('.item-row');
-        if (firstRow) {
-          const priceInput = firstRow.querySelector('.item-price');
-          priceInput.value = booking.amount;
-          autoCalculateInvoice();
-        }
-      }
-    }, 100);
-  } else {
-    document.getElementById('invGuest').value = '';
-    document.getElementById('invEmail').value = '';
-    document.getElementById('invPhone').value = '';
-    document.getElementById('invAddress').value = '';
-    document.getElementById('invCheckin').value = '';
-    document.getElementById('invCheckout').value = '';
-    document.getElementById('invAdults').value = '2';
-    document.getElementById('invChildren').value = '0';
-  }
-  
-  document.getElementById('invDate').valueAsDate = new Date();
-  document.getElementById('invDeposit').value = '0';
-  document.getElementById('invDepositPaid').value = 'false';
-  document.getElementById('invNotes').value = '';
-  document.getElementById('invFolder').value = '';
-  
-  autoCalculateInvoice();
-}
-
-function closeInvoiceModal() {
-  document.getElementById('invoiceOverlay').style.display = 'none';
-}
-
-function autoCalculateInvoice() {
-  const checkin = document.getElementById('invCheckin').value;
-  const checkout = document.getElementById('invCheckout').value;
-  const adults = parseInt(document.getElementById('invAdults').value) || 0;
-  const deposit = parseFloat(document.getElementById('invDeposit').value) || 0;
-  const depositPaid = document.getElementById('invDepositPaid').value === 'true';
-  
-  const nights = calculateNights(checkin, checkout);
-  const tax = nights * adults * 5;
-  const cleaning = 70;
-  
-  let subtotal = 0;
-  document.querySelectorAll('.item-row').forEach(row => {
-    const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
-    const price = parseFloat(row.querySelector('.item-price').value) || 0;
-    const total = qty * price;
-    row.querySelector('.item-total').value = total.toFixed(2);
-    subtotal += total;
-  });
-  
-  const total = subtotal + tax + cleaning;
-  const balance = depositPaid ? (total - deposit) : total;
-  
-  document.getElementById('calcSubtotal').textContent = '€' + subtotal.toFixed(2);
-  document.getElementById('calcTax').textContent = '€' + tax.toFixed(2) + ` (${nights}N × ${adults}P × €5)`;
-  document.getElementById('calcCleaning').textContent = '€' + cleaning.toFixed(2);
-  document.getElementById('calcTotal').textContent = '€' + total.toFixed(2);
-  document.getElementById('calcDepositDisplay').textContent = depositPaid ? '-€' + deposit.toFixed(2) : '€' + deposit.toFixed(2) + ' (ausstehend)';
-  document.getElementById('calcBalance').textContent = '€' + balance.toFixed(2);
-}
-
-function addInvoiceItem() {
-  const container = document.getElementById('itemsContainer');
-  const row = document.createElement('div');
-  row.className = 'item-row';
-  row.innerHTML = `
-    <input type="text" placeholder="Beschreibung" class="item-desc" />
-    <input type="number" placeholder="Menge" class="item-qty" value="1" min="1" />
-    <input type="number" placeholder="Preis" class="item-price" step="0.01" />
-    <input type="text" readonly class="item-total" placeholder="Summe" />
-    <button class="remove-item" onclick="removeInvoiceItem(this)">✕</button>
-  `;
-  container.appendChild(row);
-  
-  row.querySelectorAll('input').forEach(input => {
-    input.addEventListener('input', autoCalculateInvoice);
-  });
-  
-  autoCalculateInvoice();
-}
-
-function removeInvoiceItem(btn) {
-  if (document.querySelectorAll('.item-row').length > 1) {
-    btn.closest('.item-row').remove();
-    autoCalculateInvoice();
-  }
-}
-
-async function saveInvoiceFromModal() {
-  const guest = document.getElementById('invGuest').value.trim();
-  if (!guest) {
-    alert('Bitte Gast eingeben');
-    return;
-  }
-  
-  const checkin = document.getElementById('invCheckin').value;
-  const checkout = document.getElementById('invCheckout').value;
-  if (!checkin || !checkout) {
-    alert('Bitte Check-in und Check-out Datum eingeben');
-    return;
-  }
-  
-  const items = [];
-  document.querySelectorAll('.item-row').forEach(row => {
-    const desc = row.querySelector('.item-desc').value;
-    const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
-    const price = parseFloat(row.querySelector('.item-price').value) || 0;
-    if (desc && qty > 0 && price > 0) {
-      items.push({ description: desc, quantity: qty, price: price, total: qty * price });
-    }
-  });
-  
-  if (items.length === 0) {
-    alert('Bitte mindestens eine Position hinzufügen');
-    return;
-  }
-  
-  const adults = parseInt(document.getElementById('invAdults').value) || 0;
-  const children = parseInt(document.getElementById('invChildren').value) || 0;
-  const nights = calculateNights(checkin, checkout);
-  const tax = nights * adults * 5;
-  const cleaning = 70;
-  const subtotal = items.reduce((sum, item) => sum + item.total, 0);
-  const total = subtotal + tax + cleaning;
-  const deposit = parseFloat(document.getElementById('invDeposit').value) || 0;
-  const depositPaid = document.getElementById('invDepositPaid').value === 'true';
-  const balance = depositPaid ? (total - deposit) : total;
-  
-  const date = new Date(document.getElementById('invDate').value);
-  const year = date.getFullYear().toString().slice(-2);
-  const number = `${nextInvoiceNumber}/${year}`;
-  
-  let selectedFolder = document.getElementById('invFolder').value;
-  let folderId;
-  
-  if (selectedFolder) {
-    folderId = selectedFolder;
-  } else {
-    folderId = getOrCreateFolderForDate(date);
-    await saveData('folders', folders);
-  }
-  
-  const invoice = {
-    id: 'invoice_' + Date.now(),
-    number: number,
-    date: document.getElementById('invDate').value,
-    guest: guest,
-    email: document.getElementById('invEmail').value,
-    phone: document.getElementById('invPhone').value,
-    address: document.getElementById('invAddress').value,
-    checkin: checkin,
-    checkout: checkout,
-    nights: nights,
-    adults: adults,
-    children: children,
-    items: items,
-    subtotal: subtotal,
-    tax: tax,
-    cleaning: cleaning,
-    total: total,
-    deposit: deposit,
-    depositPaid: depositPaid,
-    balance: balance,
-    status: depositPaid && deposit >= total ? 'paid' : 'pending',
-    notes: document.getElementById('invNotes').value,
-    folder: folderId,
-    created: new Date().toISOString()
-  };
-  
-  const pdfFilename = `${guest.replace(/\s+/g, '_')}_${number.replace('/', '_')}.pdf`;
-  invoice.pdfFilename = pdfFilename;
-  
-  const success = await saveInvoice(invoice);
-  if (success) {
-    nextInvoiceNumber++;
-    renderFolders();
-    alert(`✅ Rechnung gespeichert!\n\n#${number}\nPDF: ${pdfFilename}`);
-    closeInvoiceModal();
-  }
-}
-
-// Folder functions
-function openFolderModal() {
-  document.getElementById('folderOverlay').style.display = 'flex';
-  document.getElementById('folderName').value = '';
-  document.getElementById('parentFolder').value = '';
-}
-
-function closeFolderModal() {
-  document.getElementById('folderOverlay').style.display = 'none';
-}
-
-async function saveFolderFromModal() {
-  const name = document.getElementById('folderName').value.trim();
-  if (!name) {
-    alert('Bitte Ordnername eingeben');
-    return;
-  }
-  
-  const parent = document.getElementById('parentFolder').value || null;
-  
-  const folder = {
-    id: 'folder_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-    name: name,
-    parent: parent,
-    created: new Date().toISOString()
-  };
-  
-  await saveFolder(folder);
-  closeFolderModal();
-  alert('✅ Ordner erstellt!');
-}
-
-// Event listeners
-document.querySelectorAll('.nav-tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-    tab.classList.add('active');
-    
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.getElementById(tab.dataset.page + 'Page').classList.add('active');
-  });
-});
-
-document.getElementById('addBookingBtn').addEventListener('click', openNewBookingModal);
-document.getElementById('mClose').addEventListener('click', closeBookingModal);
-document.getElementById('bookingOverlay').addEventListener('click', e => {
-  if (e.target.id === 'bookingOverlay') closeBookingModal();
-});
-
-document.getElementById('prevBtn').addEventListener('click', () => {
-  view.setMonth(view.getMonth() - 1);
-  buildMonth(view);
-});
-
-document.getElementById('nextBtn').addEventListener('click', () => {
-  view.setMonth(view.getMonth() + 1);
-  buildMonth(view);
-});
-
-document.getElementById('todayBtn').addEventListener('click', () => {
-  view = new Date();
-  buildMonth(view);
-});
-
-document.querySelectorAll('.tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    const targetTab = tab.dataset.tab;
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    tab.classList.add('active');
-    
-    document.getElementById('tabDetails').style.display = targetTab === 'details' ? 'block' : 'none';
-    document.getElementById('tabEmails').style.display = targetTab === 'emails' ? 'block' : 'none';
-  });
-});
-
-document.getElementById('saveBtn').addEventListener('click', async () => {
-  const bookingData = {
-    guest: document.getElementById('mGuest').value,
-    status: document.getElementById('mStatus').value,
-    email: document.getElementById('mEmail').value,
-    phone: document.getElementById('mPhone').value,
-    address: document.getElementById('mAddress').value,
-    start: document.getElementById('mStart').value,
-    end: document.getElementById('mEnd').value,
-    adults: parseInt(document.getElementById('mAdults').value) || 2,
-    children: parseInt(document.getElementById('mChildren').value) || 0,
-    amount: document.getElementById('mAmount').value,
-    depositAmount: document.getElementById('mDeposit').value,
-    notes: document.getElementById('mNotes').value
-  };
-
-  if (!bookingData.guest || !bookingData.start || !bookingData.end) {
-    alert('Bitte alle Pflichtfelder ausfüllen');
-    return;
-  }
-
-  if (isNewBooking) {
-    bookingData.id = 'booking_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-  } else if (currentBooking && currentBooking.id) {
-    bookingData.id = currentBooking.id;
-  }
-
-  const success = await saveBooking(bookingData);
-  if (success) {
-    alert('✅ Buchung gespeichert!');
-    closeBookingModal();
-  }
-});
-
-document.getElementById('deleteBtn').addEventListener('click', async () => {
-  if (!currentBooking || !currentBooking.id) return;
-  if (!confirm(`Buchung von ${currentBooking.guest} wirklich löschen?`)) return;
-
-  const success = await deleteBooking(currentBooking.id);
-  if (success) {
-    alert('✅ Buchung gelöscht!');
-    closeBookingModal();
-  }
-});
-
-document.getElementById('generateInvoiceBtn').addEventListener('click', () => {
-  console.log('Generate invoice button clicked, current booking:', currentBooking);
-  const bookingToUse = currentBooking;
-  closeBookingModal();
-  
-  document.querySelector('.nav-tab[data-page="invoices"]').click();
-  
-  setTimeout(() => {
-    openInvoiceModal(bookingToUse);
-  }, 200);
-});
-
-document.getElementById('sendPaymentReminderBtn').addEventListener('click', () => {
-  if (!currentBooking) return;
-  const template = getPaymentReminderTemplate(currentBooking);
-  openComposeModal(template.to, template.subject, template.body);
-});
-
-document.getElementById('sendWelcomeEmailBtn').addEventListener('click', () => {
-  if (!currentBooking) return;
-  const template = getWelcomeEmailTemplate(currentBooking);
-  openComposeModal(template.to, template.subject, template.body);
-});
-
-document.getElementById('createInvoiceBtn').addEventListener('click', () => openInvoiceModal());
-document.getElementById('closeInvoiceModal').addEventListener('click', closeInvoiceModal);
-document.getElementById('cancelInvoiceBtn').addEventListener('click', closeInvoiceModal);
-document.getElementById('invoiceOverlay').addEventListener('click', e => {
-  if (e.target.id === 'invoiceOverlay') closeInvoiceModal();
-});
-
-document.getElementById('saveInvoiceBtn').addEventListener('click', saveInvoiceFromModal);
-
-document.getElementById('closeInvoicePreview').addEventListener('click', closeInvoicePreview);
-document.getElementById('closeInvoicePreviewBtn').addEventListener('click', closeInvoicePreview);
-document.getElementById('invoicePreviewOverlay').addEventListener('click', e => {
-  if (e.target.id === 'invoicePreviewOverlay') closeInvoicePreview();
-});
-
-document.getElementById('deleteInvoiceBtn').addEventListener('click', async () => {
-  if (!currentInvoice) return;
-  if (!confirm(`Rechnung #${currentInvoice.number} wirklich löschen?`)) return;
-  
-  const success = await deleteInvoice(currentInvoice.id);
-  if (success) {
-    alert('✅ Rechnung gelöscht!');
-    closeInvoicePreview();
-  }
-});
-
-document.getElementById('createFolderBtn').addEventListener('click', openFolderModal);
-document.getElementById('closeFolderModal').addEventListener('click', closeFolderModal);
-document.getElementById('cancelFolderBtn').addEventListener('click', closeFolderModal);
-document.getElementById('saveFolderBtn').addEventListener('click', saveFolderFromModal);
-document.getElementById('folderOverlay').addEventListener('click', e => {
-  if (e.target.id === 'folderOverlay') closeFolderModal();
-});
-
-document.getElementById('searchInput').addEventListener('input', renderInvoices);
-
-['invCheckin', 'invCheckout', 'invAdults', 'invDeposit', 'invDepositPaid'].forEach(id => {
-  document.getElementById(id).addEventListener('change', autoCalculateInvoice);
-});
-
-document.addEventListener('input', (e) => {
-  if (e.target.classList.contains('item-qty') || e.target.classList.contains('item-price')) {
-    autoCalculateInvoice();
-  }
-});
-
-document.getElementById('syncEmailsBtn').addEventListener('click', async () => {
-  const btn = document.getElementById('syncEmailsBtn');
-  const originalText = btn.textContent;
-  btn.textContent = '⏳ Lade...';
-  btn.disabled = true;
-  
-  await loadEmails();
-  
-  btn.textContent = originalText;
-  btn.disabled = false;
-});
-
-document.getElementById('emailModalClose').addEventListener('click', closeEmailModal);
-document.getElementById('emailModalCancelBtn').addEventListener('click', closeEmailModal);
-document.getElementById('emailOverlay').addEventListener('click', e => {
-  if (e.target.id === 'emailOverlay') closeEmailModal();
-});
-
-document.getElementById('assignEmailBtn').addEventListener('click', async () => {
-  if (!currentEmail) return;
-  
-  const bookingId = document.getElementById('assignBookingSelect').value;
-  const success = await assignEmailToBooking(currentEmail.id, bookingId || null);
-  
-  if (success) {
-    alert('✅ E-Mail zugewiesen!');
-    closeEmailModal();
-    if (currentBooking) updateBookingEmails();
-  } else {
-    alert('❌ Fehler beim Zuweisen');
-  }
-});
-
-document.getElementById('composeClose').addEventListener('click', closeComposeModal);
-document.getElementById('composeCancelBtn').addEventListener('click', closeComposeModal);
-document.getElementById('composeOverlay').addEventListener('click', e => {
-  if (e.target.id === 'composeOverlay') closeComposeModal();
-});
-
-document.getElementById('composeSendBtn').addEventListener('click', async () => {
-  const to = document.getElementById('composeTo').value;
-  const subject = document.getElementById('composeSubject').value;
-  const body = document.getElementById('composeBody').value;
-
-  if (!to || !subject || !body) {
-    alert('Bitte alle Felder ausfüllen');
-    return;
-  }
-
-  const btn = document.getElementById('composeSendBtn');
-  btn.textContent = '⏳ Sende...';
-  btn.disabled = true;
-
-  const success = await sendEmail(to, subject, body);
-  
-  if (success) {
-    alert('✅ E-Mail gesendet!');
-    closeComposeModal();
-  }
-  
-  btn.textContent = '📤 Senden';
-  btn.disabled = false;
-});
-
-document.getElementById('downloadPdfBtn').addEventListener('click', () => {
-  if (!currentInvoice) return;
-  
-  const pdf = new jsPDF('p', 'mm', 'a4');
-  
-  pdf.setFontSize(20);
-  pdf.text('Haus Bischof', 20, 20);
-  pdf.setFontSize(10);
-  pdf.text('Hochgastigweg 8, 6580 St. Anton', 20, 28);
-  pdf.text('Tel: +43 680 15 17 973', 20, 33);
-  
-  pdf.setFontSize(16);
-  pdf.text('RECHNUNG / INVOICE', 150, 20);
-  pdf.setFontSize(10);
-  pdf.text('Nr. / No.: ' + currentInvoice.number, 150, 28);
-  pdf.text('Datum: ' + formatDateEU(currentInvoice.date), 150, 33);
-  
-  let y = 50;
-  pdf.setFontSize(12);
-  pdf.text('Rechnungsadresse:', 20, y);
-  y += 6;
-  pdf.setFontSize(10);
-  pdf.text(currentInvoice.guest || '', 20, y);
-  y += 5;
-  if (currentInvoice.address) {
-    currentInvoice.address.split('\n').forEach(line => {
-      pdf.text(line, 20, y);
-      y += 5;
-    });
-  }
-  
-  y += 10;
-  pdf.setFontSize(12);
-  pdf.text('Positionen:', 20, y);
-  y += 8;
-  
-  pdf.setFontSize(10);
-  (currentInvoice.items || []).forEach(item => {
-    pdf.text(item.description, 20, y);
-    pdf.text(item.quantity + ' × €' + item.price.toFixed(2), 120, y);
-    pdf.text('€' + item.total.toFixed(2), 170, y, { align: 'right' });
-    y += 6;
-  });
-  
-  y += 5;
-  pdf.text('Zwischensumme:', 120, y);
-  pdf.text('€' + currentInvoice.subtotal.toFixed(2), 170, y, { align: 'right' });
-  y += 6;
-  pdf.text('Ortstaxe:', 120, y);
-  pdf.text('€' + currentInvoice.tax.toFixed(2), 170, y, { align: 'right' });
-  y += 6;
-  pdf.text('Endreinigung:', 120, y);
-  pdf.text('€' + currentInvoice.cleaning.toFixed(2), 170, y, { align: 'right' });
-  y += 6;
-  pdf.setFontSize(12);
-  pdf.text('Gesamtbetrag:', 120, y);
-  pdf.text('€' + currentInvoice.total.toFixed(2), 170, y, { align: 'right' });
-  
-  const filename = currentInvoice.pdfFilename || 'Rechnung_' + currentInvoice.number.replace('/', '_') + '.pdf';
-  pdf.save(filename);
-});
-
-// Initialize
-async function init() {
-  console.log('Initializing app...');
-  
-  await loadBookings();
-  await loadInvoices();
-  await loadFolders();
-  await loadEmails();
-  
-  console.log('Loaded:', bookings.length, 'bookings,', invoices.length, 'invoices,', folders.length, 'folders');
-  
-  buildMonth(view);
-  updateNextAppointment();
-  updateInvoiceStats();
-  renderFolders();
-  renderInvoices();
-}
-
-init();
-  </script>
-</body>
-</html><!doctype html>
+<!doctype html>
 <html lang="de">
 <head>
   <meta charset="utf-8" />
@@ -832,91 +13,182 @@ init();
     }
 
     * { box-sizing:border-box; margin:0; padding:0; }
-    html, body { height:100%; font:16px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text","SF Pro Display",Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; background:linear-gradient(180deg,#f9fafb 0%,#eef1f6 100%); color:var(--text); }
+    html, body { 
+      height:100%; 
+      font:16px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text","SF Pro Display",Helvetica,Arial,sans-serif; 
+      -webkit-font-smoothing:antialiased; 
+      background:linear-gradient(180deg,#f9fafb 0%,#eef1f6 100%); 
+      color:var(--text); 
+    }
 
     header {
       position:sticky; top:0; z-index:10;
       display:flex; align-items:center; gap:16px; padding:12px 16px;
-      backdrop-filter:saturate(180%) blur(18px); background:#ffffffb3; border-bottom:1px solid #eceef2;
+      backdrop-filter:saturate(180%) blur(18px); 
+      background:#ffffffb3; 
+      border-bottom:1px solid #eceef2;
     }
     .brand { font-weight:700; font-size:18px; }
-    .pill { padding:8px 12px; border-radius:999px; background:#eef2ff; color:#334155; font-weight:600; font-size:13px; }
+    .pill { 
+      padding:8px 12px; 
+      border-radius:999px; 
+      background:#eef2ff; 
+      color:#334155; 
+      font-weight:600; 
+      font-size:13px; 
+    }
 
     .nav-tabs {
-      display:flex; gap:4px; margin-left:auto;
+      display:flex; 
+      gap:4px; 
+      margin-left:auto;
     }
     .nav-tab {
-      padding:8px 16px; border-radius:8px; background:transparent;
-      color:#64748b; font-weight:600; cursor:pointer; border:none;
-      transition: all 0.2s; font-size:14px;
+      padding:8px 16px; 
+      border-radius:8px; 
+      background:transparent;
+      color:#64748b; 
+      font-weight:600; 
+      cursor:pointer; 
+      border:none;
+      transition: all 0.2s; 
+      font-size:14px;
     }
     .nav-tab:hover { background:#f1f5f9; }
     .nav-tab.active { background:var(--accent); color:#fff; }
 
     main.grid {
-      display:grid; gap:16px; padding:16px; max-width:1800px; margin:0 auto;
+      display:grid; 
+      gap:16px; 
+      padding:16px; 
+      max-width:1800px; 
+      margin:0 auto;
       grid-template-columns:280px 1fr 380px;
     }
-    @media(max-width:1400px){ main.grid { grid-template-columns:1fr 380px; } .sidebar-left { display:none !important; } }
-    @media(max-width:900px){ main.grid { grid-template-columns:1fr; } }
+    @media(max-width:1400px){ 
+      main.grid { grid-template-columns:1fr 380px; } 
+      .sidebar-left { display:none !important; } 
+    }
+    @media(max-width:900px){ 
+      main.grid { grid-template-columns:1fr; } 
+    }
 
-    main.single { max-width:1400px; margin:0 auto; padding:16px; }
+    main.single { 
+      max-width:1400px; 
+      margin:0 auto; 
+      padding:16px; 
+    }
 
     .card {
-      background:var(--glass); border-radius:var(--radius); box-shadow:var(--shadow);
-      padding:var(--pad); backdrop-filter:saturate(160%) blur(14px);
+      background:var(--glass); 
+      border-radius:var(--radius); 
+      box-shadow:var(--shadow);
+      padding:var(--pad); 
+      backdrop-filter:saturate(160%) blur(14px);
     }
     .card h3 { margin:0 0 12px; font-size:18px; }
 
     .btn {
-      display:inline-flex; align-items:center; gap:8px; padding:10px 14px;
-      border:0; border-radius:12px; background:linear-gradient(#0a84ff,#0066d6);
-      color:#fff; font-weight:600; box-shadow:var(--shadow); cursor:pointer; transition: all 0.2s;
+      display:inline-flex; 
+      align-items:center; 
+      gap:8px; 
+      padding:10px 14px;
+      border:0; 
+      border-radius:12px; 
+      background:linear-gradient(#0a84ff,#0066d6);
+      color:#fff; 
+      font-weight:600; 
+      box-shadow:var(--shadow); 
+      cursor:pointer; 
+      transition: all 0.2s;
       font-size:14px;
     }
-    .btn:hover { transform: translateY(-1px); box-shadow: 0 12px 28px rgba(0,0,0,.1); }
+    .btn:hover { 
+      transform: translateY(-1px); 
+      box-shadow: 0 12px 28px rgba(0,0,0,.1); 
+    }
     .btn.secondary { background:#eef1f6; color:#0b0c0f; }
-    .btn.ghost { background:transparent; border:1px solid #e5e7eb; color:#0b0c0f; box-shadow: none; }
+    .btn.ghost { 
+      background:transparent; 
+      border:1px solid #e5e7eb; 
+      color:#0b0c0f; 
+      box-shadow: none; 
+    }
     .btn.danger { background:linear-gradient(#ef4444,#dc2626); color:#fff; }
     .btn.success { background:linear-gradient(#16a34a,#15803d); }
     .btn.small { padding:6px 10px; font-size:13px; }
 
     .stat {
-      display:flex; align-items:center; justify-content:space-between; padding:12px;
-      background:#fff; border-radius:12px; border:1px solid #eef0f4;
+      display:flex; 
+      align-items:center; 
+      justify-content:space-between; 
+      padding:12px;
+      background:#fff; 
+      border-radius:12px; 
+      border:1px solid #eef0f4;
     }
     .tag {
-      padding:6px 10px; border-radius:999px; font-weight:700; font-size:12px;
+      padding:6px 10px; 
+      border-radius:999px; 
+      font-weight:700; 
+      font-size:12px;
     }
     .tag.pending { background:#ffedd5; color:var(--pending); }
     .tag.confirm { background:#dcfce7; color:var(--good); }
 
     .stats-grid {
-      display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));
-      gap:16px; margin-bottom:20px;
+      display:grid; 
+      grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));
+      gap:16px; 
+      margin-bottom:20px;
     }
     .stat-card {
-      background:#fff; border:1px solid #eef0f4; border-radius:12px;
+      background:#fff; 
+      border:1px solid #eef0f4; 
+      border-radius:12px;
       padding:16px;
     }
     .stat-label {
-      color:#94a3b8; font-size:12px; margin-bottom:6px;
+      color:#94a3b8; 
+      font-size:12px; 
+      margin-bottom:6px;
     }
     .stat-value {
-      font-size:24px; font-weight:700;
+      font-size:24px; 
+      font-weight:700;
     }
 
     .calendar { padding:0; overflow:hidden; }
-    .cal-head { display:flex; align-items:center; justify-content:space-between; padding:12px 12px 8px; }
+    .cal-head { 
+      display:flex; 
+      align-items:center; 
+      justify-content:space-between; 
+      padding:12px 12px 8px; 
+    }
     .cal-title { font-weight:700; font-size:18px; }
-    .legend { display:flex; gap:10px; align-items:center; color:var(--muted); font-size:12px; }
-    .dot { width:10px; height:10px; border-radius:50%; display:inline-block; }
+    .legend { 
+      display:flex; 
+      gap:10px; 
+      align-items:center; 
+      color:var(--muted); 
+      font-size:12px; 
+    }
+    .dot { 
+      width:10px; 
+      height:10px; 
+      border-radius:50%; 
+      display:inline-block; 
+    }
     .dot.pending { background:var(--pending); }
     .dot.confirm { background:var(--good); }
 
     .cal-grid {
-      display:grid; grid-template-columns:repeat(7,1fr); gap:10px; padding:12px;
-      background:transparent; border-top:1px solid #eceef2;
+      display:grid; 
+      grid-template-columns:repeat(7,1fr); 
+      gap:10px; 
+      padding:12px;
+      background:transparent; 
+      border-top:1px solid #eceef2;
     }
     .dow {
       text-align: center;
@@ -927,14 +199,35 @@ init();
       border-bottom: 1px solid #eef0f4;
     }
     .cell {
-      aspect-ratio:1/1; background:#fff; border:1px solid #eef0f4;
-      border-radius:12px; position:relative; overflow:hidden;
+      aspect-ratio:1/1; 
+      background:#fff; 
+      border:1px solid #eef0f4;
+      border-radius:12px; 
+      position:relative; 
+      overflow:hidden;
     }
-    .date { position:absolute; top:8px; right:10px; color:#94a3b8; font-size:12px; z-index:3; pointer-events:none; }
+    .date { 
+      position:absolute; 
+      top:8px; 
+      right:10px; 
+      color:#94a3b8; 
+      font-size:12px; 
+      z-index:3; 
+      pointer-events:none; 
+    }
     .seg {
-      position:absolute; inset:8px; border-radius:12px; color:#fff;
-      font-weight:800; font-size:13px; display:flex; align-items:center; justify-content:center;
-      text-align:center; cursor:pointer; z-index:1;
+      position:absolute; 
+      inset:8px; 
+      border-radius:12px; 
+      color:#fff;
+      font-weight:800; 
+      font-size:13px; 
+      display:flex; 
+      align-items:center; 
+      justify-content:center;
+      text-align:center; 
+      cursor:pointer; 
+      z-index:1;
     }
     .seg.pending { background:var(--pending); }
     .seg.confirm { background:var(--good); }
@@ -944,8 +237,13 @@ init();
       overflow-y: auto;
     }
     .email-item {
-      background:#fff; border:1px solid #eef0f4; border-radius:12px;
-      padding:12px; margin-bottom:10px; cursor:pointer; transition: all 0.2s;
+      background:#fff; 
+      border:1px solid #eef0f4; 
+      border-radius:12px;
+      padding:12px; 
+      margin-bottom:10px; 
+      cursor:pointer; 
+      transition: all 0.2s;
     }
     .email-item:hover {
       border-color: var(--accent);
@@ -956,171 +254,287 @@ init();
     }
 
     .folder-tree {
-      background:#fff; border-radius:12px; border:1px solid #eef0f4;
-      padding:12px; margin-bottom:16px; max-height:400px; overflow-y:auto;
+      background:#fff; 
+      border-radius:12px; 
+      border:1px solid #eef0f4;
+      padding:12px; 
+      margin-bottom:16px; 
+      max-height:400px; 
+      overflow-y:auto;
     }
     .folder {
-      padding:10px 12px; border-radius:8px; cursor:pointer;
-      display:flex; align-items:center; gap:8px; transition: all 0.2s;
+      padding:10px 12px; 
+      border-radius:8px; 
+      cursor:pointer;
+      display:flex; 
+      align-items:center; 
+      gap:8px; 
+      transition: all 0.2s;
       margin-bottom:4px;
     }
     .folder:hover { background:#f8fafc; }
-    .folder.active { background:#eff6ff; border-left:3px solid var(--accent); }
+    .folder.active { 
+      background:#eff6ff; 
+      border-left:3px solid var(--accent); 
+    }
     .folder-icon { font-size:18px; }
     .folder-name { font-weight:600; flex:1; }
     .folder-count { color:#94a3b8; font-size:12px; }
 
     .invoice-list {
-      display:grid; gap:12px;
+      display:grid; 
+      gap:12px;
     }
     .invoice-item {
-      background:#fff; border:1px solid #eef0f4; border-radius:12px;
-      padding:14px 16px; cursor:pointer; transition: all 0.2s;
-      display:flex; align-items:center; gap:16px;
+      background:#fff; 
+      border:1px solid #eef0f4; 
+      border-radius:12px;
+      padding:14px 16px; 
+      cursor:pointer; 
+      transition: all 0.2s;
+      display:flex; 
+      align-items:center; 
+      gap:16px;
     }
     .invoice-item:hover {
       border-color: var(--accent);
       box-shadow: 0 4px 12px rgba(0,0,0,.08);
     }
     .invoice-number {
-      font-weight:700; font-size:16px; color:var(--accent);
+      font-weight:700; 
+      font-size:16px; 
+      color:var(--accent);
       min-width:80px;
     }
     .invoice-details {
       flex:1;
     }
     .invoice-guest {
-      font-weight:600; margin-bottom:4px;
+      font-weight:600; 
+      margin-bottom:4px;
     }
     .invoice-date {
-      color:#94a3b8; font-size:13px;
+      color:#94a3b8; 
+      font-size:13px;
     }
     .invoice-amount {
-      font-weight:700; font-size:18px; text-align:right;
+      font-weight:700; 
+      font-size:18px; 
+      text-align:right;
       min-width:100px;
     }
     .invoice-status {
-      padding:6px 12px; border-radius:999px; font-size:12px; font-weight:700;
+      padding:6px 12px; 
+      border-radius:999px; 
+      font-size:12px; 
+      font-weight:700;
     }
-    .invoice-status.paid { background:#dcfce7; color:var(--good); }
-    .invoice-status.pending { background:#ffedd5; color:var(--pending); }
+    .invoice-status.paid { 
+      background:#dcfce7; 
+      color:var(--good); 
+    }
+    .invoice-status.pending { 
+      background:#ffedd5; 
+      color:var(--pending); 
+    }
 
     .search-input {
-      flex:1; padding:12px 16px; border:1px solid #e5e7eb; border-radius:12px;
-      font-size:14px; background:#fff; width:100%;
+      flex:1; 
+      padding:12px 16px; 
+      border:1px solid #e5e7eb; 
+      border-radius:12px;
+      font-size:14px; 
+      background:#fff; 
+      width:100%;
     }
-    .search-input:focus { outline:none; border-color:var(--accent); }
+    .search-input:focus { 
+      outline:none; 
+      border-color:var(--accent); 
+    }
 
     .page { display:none; }
     .page.active { display:block; }
 
     .overlay {
-      position:fixed; inset:0; background:rgba(0,0,0,.25);
-      display:none; align-items:center; justify-content:center; padding:16px; z-index:100;
+      position:fixed; 
+      inset:0; 
+      background:rgba(0,0,0,.25);
+      display:none; 
+      align-items:center; 
+      justify-content:center; 
+      padding:16px; 
+      z-index:100;
     }
     .modal {
-      width:min(900px,96vw); max-height:90vh;
-      background:#fff; border-radius:20px;
-      box-shadow:0 24px 60px rgba(0,0,0,.18); overflow:hidden;
-      display:flex; flex-direction:column;
+      width:min(900px,96vw); 
+      max-height:90vh;
+      background:#fff; 
+      border-radius:20px;
+      box-shadow:0 24px 60px rgba(0,0,0,.18); 
+      overflow:hidden;
+      display:flex; 
+      flex-direction:column;
     }
     .modal-head {
-      display:flex; align-items:center; justify-content:space-between;
-      padding:16px 18px; border-bottom:1px solid #eef0f4;
+      display:flex; 
+      align-items:center; 
+      justify-content:space-between;
+      padding:16px 18px; 
+      border-bottom:1px solid #eef0f4;
     }
     .modal-body {
-      padding:20px; overflow-y:auto; flex:1;
+      padding:20px; 
+      overflow-y:auto; 
+      flex:1;
     }
     .modal-actions {
-      display:flex; gap:10px; padding:16px 18px;
-      border-top:1px solid #eef0f4; justify-content:space-between;
+      display:flex; 
+      gap:10px; 
+      padding:16px 18px;
+      border-top:1px solid #eef0f4; 
+      justify-content:space-between;
     }
 
     .form-grid {
-      display:grid; grid-template-columns:1fr 1fr; gap:16px;
+      display:grid; 
+      grid-template-columns:1fr 1fr; 
+      gap:16px;
     }
     .form-field {
-      display:flex; flex-direction:column; gap:6px;
+      display:flex; 
+      flex-direction:column; 
+      gap:6px;
     }
     .form-field.full {
       grid-column:1 / span 2;
     }
     .form-field label {
-      font-size:13px; font-weight:600; color:#64748b;
+      font-size:13px; 
+      font-weight:600; 
+      color:#64748b;
     }
     .form-field input, .form-field textarea, .form-field select {
-      padding:10px 12px; border:1px solid #e5e7eb; border-radius:8px;
-      font-size:14px; font-family:inherit; background:#fff;
+      padding:10px 12px; 
+      border:1px solid #e5e7eb; 
+      border-radius:8px;
+      font-size:14px; 
+      font-family:inherit; 
+      background:#fff;
     }
     .form-field input:focus, .form-field textarea:focus, .form-field select:focus {
-      outline:none; border-color:var(--accent);
+      outline:none; 
+      border-color:var(--accent);
     }
     .form-field textarea {
-      resize:vertical; min-height:80px;
+      resize:vertical; 
+      min-height:80px;
     }
 
     .invoice-items {
-      background:#f8fafc; border-radius:12px; padding:16px; margin:16px 0;
+      background:#f8fafc; 
+      border-radius:12px; 
+      padding:16px; 
+      margin:16px 0;
     }
     .invoice-items h4 {
-      margin-bottom:12px; font-size:14px;
+      margin-bottom:12px; 
+      font-size:14px;
     }
     .item-row {
-      display:grid; grid-template-columns:2fr 1fr 1fr 1fr auto; gap:8px;
-      align-items:center; margin-bottom:8px;
+      display:grid; 
+      grid-template-columns:2fr 1fr 1fr 1fr auto; 
+      gap:8px;
+      align-items:center; 
+      margin-bottom:8px;
     }
     .item-row input {
-      padding:8px 10px; border:1px solid #e5e7eb; border-radius:6px;
+      padding:8px 10px; 
+      border:1px solid #e5e7eb; 
+      border-radius:6px;
       font-size:13px;
     }
     .remove-item {
-      background:#fee2e2; color:#dc2626; border:none;
-      padding:6px 10px; border-radius:6px; cursor:pointer; font-weight:600;
+      background:#fee2e2; 
+      color:#dc2626; 
+      border:none;
+      padding:6px 10px; 
+      border-radius:6px; 
+      cursor:pointer; 
+      font-weight:600;
     }
 
     .invoice-totals {
-      background:#f8fafc; border-radius:12px; padding:16px; margin-top:16px;
+      background:#f8fafc; 
+      border-radius:12px; 
+      padding:16px; 
+      margin-top:16px;
     }
     .total-row {
-      display:flex; justify-content:space-between; padding:8px 0;
+      display:flex; 
+      justify-content:space-between; 
+      padding:8px 0;
       font-size:14px;
     }
     .total-row.grand {
-      border-top:2px solid #e5e7eb; margin-top:8px; padding-top:12px;
-      font-weight:700; font-size:16px;
+      border-top:2px solid #e5e7eb; 
+      margin-top:8px; 
+      padding-top:12px;
+      font-weight:700; 
+      font-size:16px;
     }
 
     .invoice-preview {
-      background:#fff; border:1px solid #e5e7eb; border-radius:12px;
-      padding:40px; font-size:13px; line-height:1.6;
+      background:#fff; 
+      border:1px solid #e5e7eb; 
+      border-radius:12px;
+      padding:40px; 
+      font-size:13px; 
+      line-height:1.6;
       box-shadow: 0 4px 12px rgba(0,0,0,.06);
     }
     .invoice-header {
-      display:flex; justify-content:space-between; margin-bottom:30px;
+      display:flex; 
+      justify-content:space-between; 
+      margin-bottom:30px;
     }
     .invoice-logo {
-      font-size:24px; font-weight:700; color:var(--accent);
+      font-size:24px; 
+      font-weight:700; 
+      color:var(--accent);
     }
     .invoice-info {
-      text-align:right; color:#64748b;
+      text-align:right; 
+      color:#64748b;
     }
     .invoice-addresses {
-      display:grid; grid-template-columns:1fr 1fr; gap:40px;
+      display:grid; 
+      grid-template-columns:1fr 1fr; 
+      gap:40px;
       margin:30px 0;
     }
     .address-block h4 {
-      font-size:12px; color:#94a3b8; margin-bottom:8px;
-      text-transform:uppercase; letter-spacing:0.5px;
+      font-size:12px; 
+      color:#94a3b8; 
+      margin-bottom:8px;
+      text-transform:uppercase; 
+      letter-spacing:0.5px;
     }
     .invoice-table {
-      width:100%; border-collapse:collapse; margin:30px 0;
+      width:100%; 
+      border-collapse:collapse; 
+      margin:30px 0;
     }
     .invoice-table th {
-      background:#f8fafc; padding:12px; text-align:left;
-      font-size:12px; color:#64748b; border-bottom:2px solid #e5e7eb;
+      background:#f8fafc; 
+      padding:12px; 
+      text-align:left;
+      font-size:12px; 
+      color:#64748b; 
+      border-bottom:2px solid #e5e7eb;
     }
     .invoice-table td {
-      padding:12px; border-bottom:1px solid #eef0f4;
+      padding:12px; 
+      border-bottom:1px solid #eef0f4;
     }
 
     .tabs {
@@ -1257,924 +671,8 @@ init();
     </div>
   </main>
 
-  <!-- Booking Modal -->
-  <div class="overlay" id="bookingOverlay">
-    <div class="modal">
-      <div class="modal-head">
-        <div class="modal-title" id="mTitle">Buchung</div>
-        <button class="btn ghost" id="mClose">✕</button>
-      </div>
-      
-      <div class="tabs">
-        <button class="tab active" data-tab="details">Details</button>
-        <button class="tab" data-tab="emails">E-Mails (<span id="bookingEmailCount">0</span>)</button>
-      </div>
-      
-      <div class="modal-body">
-        <div id="tabDetails">
-          <div class="form-grid">
-            <div class="form-field">
-              <label>Gast</label>
-              <input type="text" id="mGuest" />
-            </div>
-            <div class="form-field">
-              <label>Status</label>
-              <select id="mStatus">
-                <option value="pending">Ausstehend</option>
-                <option value="confirm">Bestätigt</option>
-              </select>
-            </div>
-            <div class="form-field">
-              <label>Anreise</label>
-              <input type="date" id="mStart" />
-            </div>
-            <div class="form-field">
-              <label>Abreise</label>
-              <input type="date" id="mEnd" />
-            </div>
-            <div class="form-field">
-              <label>E-Mail</label>
-              <input type="email" id="mEmail" />
-            </div>
-            <div class="form-field">
-              <label>Telefon</label>
-              <input type="text" id="mPhone" />
-            </div>
-            <div class="form-field full">
-              <label>Adresse</label>
-              <textarea id="mAddress"></textarea>
-            </div>
-            <div class="form-field">
-              <label>Erwachsene</label>
-              <input type="number" id="mAdults" min="0" value="2" />
-            </div>
-            <div class="form-field">
-              <label>Kinder</label>
-              <input type="number" id="mChildren" min="0" value="0" />
-            </div>
-            <div class="form-field">
-              <label>Gesamtbetrag (€)</label>
-              <input type="text" id="mAmount" placeholder="0.00" />
-            </div>
-            <div class="form-field">
-              <label>Anzahlung (€)</label>
-              <input type="text" id="mDeposit" placeholder="0.00" />
-            </div>
-            <div class="form-field full">
-              <label>Notizen</label>
-              <textarea id="mNotes"></textarea>
-            </div>
-          </div>
-        </div>
-        
-        <div id="tabEmails" style="display:none">
-          <div style="background:#f8fafc;border:1px solid #eef0f4;border-radius:12px;padding:12px">
-            <h4 style="font-size:14px;margin-bottom:10px">Zugewiesene E-Mails</h4>
-            <div id="bookingEmails">
-              <div style="text-align:center;color:var(--muted);padding:20px">
-                Keine E-Mails zugewiesen
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <div class="modal-actions">
-        <div>
-          <button class="btn danger" id="deleteBtn" style="display:none;">Löschen</button>
-        </div>
-        <div style="display:flex;gap:10px">
-          <button class="btn secondary" id="sendPaymentReminderBtn">💳 Anzahlung</button>
-          <button class="btn secondary" id="sendWelcomeEmailBtn">👋 Willkommen</button>
-          <button class="btn secondary" id="generateInvoiceBtn">🧾 Rechnung</button>
-          <button class="btn" id="saveBtn">Speichern</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Invoice Modal -->
-  <div class="overlay" id="invoiceOverlay">
-    <div class="modal">
-      <div class="modal-head">
-        <div>Rechnung erstellen</div>
-        <button class="btn ghost" id="closeInvoiceModal">✕</button>
-      </div>
-      <div class="modal-body">
-        <div class="form-grid">
-          <div class="form-field">
-            <label>Gast / Guest *</label>
-            <input type="text" id="invGuest" required />
-          </div>
-          <div class="form-field">
-            <label>Rechnungsdatum *</label>
-            <input type="date" id="invDate" required />
-          </div>
-          <div class="form-field full">
-            <label>Gastadresse</label>
-            <textarea id="invAddress"></textarea>
-          </div>
-          <div class="form-field">
-            <label>E-Mail</label>
-            <input type="email" id="invEmail" />
-          </div>
-          <div class="form-field">
-            <label>Telefon</label>
-            <input type="text" id="invPhone" />
-          </div>
-          <div class="form-field">
-            <label>Anreise / Check-in *</label>
-            <input type="date" id="invCheckin" required />
-          </div>
-          <div class="form-field">
-            <label>Abreise / Check-out *</label>
-            <input type="date" id="invCheckout" required />
-          </div>
-          <div class="form-field">
-            <label>Erwachsene</label>
-            <input type="number" id="invAdults" min="1" value="2" />
-          </div>
-          <div class="form-field">
-            <label>Kinder</label>
-            <input type="number" id="invChildren" min="0" value="0" />
-          </div>
-          <div class="form-field full">
-            <label>Ordner auswählen</label>
-            <select id="invFolder">
-              <option value="">Automatisch (Jahr/Monat)</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="invoice-items">
-          <h4>Positionen / Line Items</h4>
-          <div id="itemsContainer">
-            <div class="item-row">
-              <input type="text" placeholder="Beschreibung" class="item-desc" value="Appartment Bischof" />
-              <input type="number" placeholder="Menge" class="item-qty" value="1" min="1" />
-              <input type="number" placeholder="Preis" class="item-price" step="0.01" />
-              <input type="text" readonly class="item-total" placeholder="Summe" />
-              <button class="remove-item" onclick="removeInvoiceItem(this)">✕</button>
-            </div>
-          </div>
-          <button class="btn small secondary" onclick="addInvoiceItem()">+ Position</button>
-        </div>
-
-        <div class="form-grid">
-          <div class="form-field">
-            <label>Anzahlung (€)</label>
-            <input type="number" id="invDeposit" step="0.01" value="0" />
-          </div>
-          <div class="form-field">
-            <label>Anzahlung bezahlt</label>
-            <select id="invDepositPaid">
-              <option value="false">Nein</option>
-              <option value="true">Ja</option>
-            </select>
-          </div>
-          <div class="form-field full">
-            <label>Notizen</label>
-            <textarea id="invNotes"></textarea>
-          </div>
-        </div>
-
-        <div class="invoice-totals">
-          <div class="total-row">
-            <span>Zwischensumme:</span>
-            <span id="calcSubtotal">€0.00</span>
-          </div>
-          <div class="total-row">
-            <span>Ortstaxe:</span>
-            <span id="calcTax">€0.00</span>
-          </div>
-          <div class="total-row">
-            <span>Endreinigung:</span>
-            <span id="calcCleaning">€70.00</span>
-          </div>
-          <div class="total-row grand">
-            <span>Gesamtbetrag:</span>
-            <span id="calcTotal">€0.00</span>
-          </div>
-          <div class="total-row" style="color:var(--pending)">
-            <span>Anzahlung:</span>
-            <span id="calcDepositDisplay">-€0.00</span>
-          </div>
-          <div class="total-row grand" style="color:var(--accent)">
-            <span>Restbetrag:</span>
-            <span id="calcBalance">€0.00</span>
-          </div>
-        </div>
-      </div>
-      <div class="modal-actions">
-        <div></div>
-        <div style="display:flex;gap:10px">
-          <button class="btn secondary" id="cancelInvoiceBtn">Abbrechen</button>
-          <button class="btn success" id="saveInvoiceBtn">💾 Speichern & PDF erstellen</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Invoice Preview Modal -->
-  <div class="overlay" id="invoicePreviewOverlay">
-    <div class="modal" style="max-width:1000px">
-      <div class="modal-head">
-        <div>Rechnungsvorschau</div>
-        <button class="btn ghost" id="closeInvoicePreview">✕</button>
-      </div>
-      <div class="modal-body" style="max-height:70vh;overflow-y:auto">
-        <div id="invoicePreviewContent" class="invoice-preview"></div>
-      </div>
-      <div class="modal-actions">
-        <div>
-          <button class="btn danger" id="deleteInvoiceBtn">🗑️ Löschen</button>
-        </div>
-        <div style="display:flex;gap:10px">
-          <button class="btn secondary" id="downloadPdfBtn">📥 PDF Download</button>
-          <button class="btn" id="closeInvoicePreviewBtn">Schließen</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Folder Modal -->
-  <div class="overlay" id="folderOverlay">
-    <div class="modal" style="max-width:500px">
-      <div class="modal-head">
-        <div>Neuer Ordner</div>
-        <button class="btn ghost" id="closeFolderModal">✕</button>
-      </div>
-      <div class="modal-body">
-        <div class="form-field">
-          <label>Ordnername</label>
-          <input type="text" id="folderName" placeholder="z.B. Dezember 2025" />
-        </div>
-        <div class="form-field">
-          <label>Übergeordneter Ordner</label>
-          <select id="parentFolder">
-            <option value="">Hauptverzeichnis / Root</option>
-          </select>
-        </div>
-      </div>
-      <div class="modal-actions">
-        <div></div>
-        <div style="display:flex;gap:10px">
-          <button class="btn secondary" id="cancelFolderBtn">Abbrechen</button>
-          <button class="btn" id="saveFolderBtn">Erstellen</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Email Detail Modal -->
-  <div class="overlay" id="emailOverlay">
-    <div class="modal">
-      <div class="modal-head">
-        <div>E-Mail Details</div>
-        <button class="btn ghost" id="emailModalClose">✕</button>
-      </div>
-      <div class="modal-body">
-        <div style="margin-bottom:16px">
-          <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Von</div>
-          <div style="font-weight:700" id="emailDetailFrom"></div>
-        </div>
-        <div style="margin-bottom:16px">
-          <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Betreff</div>
-          <div style="font-weight:600" id="emailDetailSubject"></div>
-        </div>
-        <div style="margin-bottom:16px">
-          <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Datum</div>
-          <div id="emailDetailDate"></div>
-        </div>
-        <div style="margin-bottom:16px">
-          <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Nachricht</div>
-          <div style="background:#f8fafc;padding:16px;border-radius:8px;white-space:pre-wrap;line-height:1.6;max-height:300px;overflow-y:auto" id="emailDetailBody"></div>
-        </div>
-        <div>
-          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:8px">Buchung zuweisen</label>
-          <select id="assignBookingSelect" style="width:100%;padding:10px;border-radius:8px;border:1px solid #e5e7eb;font-size:14px">
-            <option value="">Keine Zuweisung</option>
-          </select>
-        </div>
-      </div>
-      <div class="modal-actions">
-        <div></div>
-        <div style="display:flex;gap:10px">
-          <button class="btn secondary" id="emailModalCancelBtn">Abbrechen</button>
-          <button class="btn" id="assignEmailBtn">Zuweisen</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Email Compose Modal -->
-  <div class="overlay" id="composeOverlay">
-    <div class="modal">
-      <div class="modal-head">
-        <div>E-Mail senden</div>
-        <button class="btn ghost" id="composeClose">✕</button>
-      </div>
-      <div class="modal-body">
-        <div style="margin-bottom:16px">
-          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:8px">An</label>
-          <input type="email" id="composeTo" style="width:100%;padding:10px;border-radius:8px;border:1px solid #e5e7eb;font-size:14px" />
-        </div>
-        <div style="margin-bottom:16px">
-          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:8px">Betreff</label>
-          <input type="text" id="composeSubject" style="width:100%;padding:10px;border-radius:8px;border:1px solid #e5e7eb;font-size:14px" />
-        </div>
-        <div>
-          <label style="display:block;font-size:12px;color:var(--muted);margin-bottom:8px">Nachricht</label>
-          <textarea id="composeBody" style="width:100%;min-height:300px;padding:12px;border-radius:8px;border:1px solid #e5e7eb;font-family:inherit;line-height:1.6;font-size:14px"></textarea>
-        </div>
-      </div>
-      <div class="modal-actions">
-        <div></div>
-        <div style="display:flex;gap:10px">
-          <button class="btn secondary" id="composeCancelBtn">Abbrechen</button>
-          <button class="btn" id="composeSendBtn">📤 Senden</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <script>
-const { jsPDF } = window.jspdf;
-
-let bookings = [];
-let emails = [];
-let invoices = [];
-let folders = [];
-let currentBooking = null;
-let currentInvoice = null;
-let currentEmail = null;
-let isNewBooking = false;
-let view = new Date();
-let nextInvoiceNumber = 1;
-let currentFolder = null;
-
-// Helper functions
-function pad(n) { return n < 10 ? ('0' + n) : '' + n; }
-function iso(d) { return d.toISOString().slice(0, 10); }
-function formatDateEU(dateStr) {
-  if (!dateStr) return '';
-  const [y, m, d] = dateStr.split('-');
-  return `${d}.${m}.${y}`;
-}
-function calculateNights(startISO, endISO) {
-  if (!startISO || !endISO) return 0;
-  const start = new Date(startISO);
-  const end = new Date(endISO);
-  const diff = end - start;
-  return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
-}
-function getBookingColor(guestName) {
-  const colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4', '#6366f1', '#14b8a6', '#a855f7', '#0ea5e9', '#d946ef'];
-  let hash = 0;
-  for (let i = 0; i < guestName.length; i++) {
-    hash = guestName.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return colors[Math.abs(hash) % colors.length];
-}
-
-// Storage with localStorage
-async function loadData(key) {
-  try {
-    const stored = localStorage.getItem(key);
-    return stored ? JSON.parse(stored) : [];
-  } catch (e) {
-    console.error(`Load ${key} error:`, e);
-    return [];
-  }
-}
-
-async function saveData(key, data) {
-  try {
-    localStorage.setItem(key, JSON.stringify(data));
-    return true;
-  } catch (e) {
-    console.error(`Save ${key} error:`, e);
-    return false;
-  }
-}
-
-// API functions
-async function loadBookings() {
-  let localBookings = await loadData('bookings');
+  <!-- Modals kommen im nächsten Teil -->
   
-  try {
-    const res = await fetch('/api/bookings');
-    if (res.ok) {
-      const apiBookings = await res.json();
-      const mergedBookings = [...localBookings];
-      apiBookings.forEach(apiBooking => {
-        if (!mergedBookings.find(b => b.id === apiBooking.id)) {
-          mergedBookings.push(apiBooking);
-        }
-      });
-      bookings = mergedBookings;
-      await saveData('bookings', bookings);
-      return;
-    }
-  } catch (e) {
-    console.log('API not available, using local storage');
-  }
-  
-  bookings = localBookings;
-  if (bookings.length === 0) {
-    bookings = [{
-      id: '1', guest: 'Test', status: 'pending',
-      start: '2025-11-12', end: '2025-11-15',
-      email: 'test@example.com', phone: '+43 123 456789',
-      address: 'Teststraße 1\n1010 Wien',
-      adults: 2, children: 0, amount: '600',
-      notes: 'Test Buchung'
-    }];
-    await saveData('bookings', bookings);
-  }
-}
-
-async function saveBooking(booking) {
-  if (!booking.id) {
-    booking.id = 'booking_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-  }
-  
-  const idx = bookings.findIndex(b => b.id === booking.id);
-  if (idx !== -1) {
-    bookings[idx] = { ...booking };
-  } else {
-    bookings.push({ ...booking });
-  }
-  
-  try {
-    await fetch('/api/bookings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(booking)
-    });
-  } catch (e) {
-    console.log('API save failed, using local only');
-  }
-  
-  await saveData('bookings', bookings);
-  buildMonth(view);
-  updateNextAppointment();
-  return true;
-}
-
-async function deleteBooking(bookingId) {
-  bookings = bookings.filter(b => b.id !== bookingId);
-  
-  try {
-    await fetch('/api/bookings', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: bookingId })
-    });
-  } catch (e) {
-    console.log('API delete failed');
-  }
-  
-  await saveData('bookings', bookings);
-  buildMonth(view);
-  updateNextAppointment();
-  return true;
-}
-
-async function loadEmails() {
-  try {
-    const res = await fetch('/api/gmail/fetch');
-    if (res.status === 401) {
-      console.log('Gmail nicht verbunden');
-      displayEmailsPlaceholder();
-      return;
-    }
-    if (res.ok) {
-      emails = await res.json();
-      displayEmails();
-      return;
-    }
-  } catch (e) {
-    console.log('Gmail API nicht verfügbar');
-  }
-  displayEmailsPlaceholder();
-}
-
-async function assignEmailToBooking(emailId, bookingId) {
-  try {
-    const res = await fetch('/api/emails/assign', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ emailId, bookingId })
-    });
-    if (!res.ok) throw new Error('Assign failed');
-    const email = emails.find(e => e.id === emailId);
-    if (email) email.booking_id = bookingId;
-    displayEmails();
-    return true;
-  } catch (err) {
-    console.error('Assign error:', err);
-    return false;
-  }
-}
-
-async function sendEmail(to, subject, body) {
-  try {
-    const res = await fetch('/api/gmail/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to, subject, body })
-    });
-    if (!res.ok) throw new Error('Send failed');
-    return true;
-  } catch (err) {
-    console.error('Send error:', err);
-    alert('E-Mail konnte nicht gesendet werden.');
-    return false;
-  }
-}
-
-function displayEmails() {
-  const emailList = document.getElementById('emailList');
-  const emailCount = document.getElementById('emailCount');
-  
-  if (!emails || emails.length === 0) {
-    emailList.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px">Keine E-Mails geladen</div>';
-    emailCount.textContent = '0';
-    return;
-  }
-
-  emailCount.textContent = emails.length;
-
-  emailList.innerHTML = emails.map(email => {
-    const assigned = email.booking_id ? 'assigned' : '';
-    const booking = bookings.find(b => b.id === email.booking_id);
-    const badge = booking ? `<span style="padding:4px 8px;border-radius:999px;font-size:11px;background:#dcfce7;color:#16a34a;font-weight:700">📎 ${booking.guest}</span>` : '';
-    
-    return `
-      <div class="email-item ${assigned}" data-email-id="${email.id}">
-        <div style="font-weight:700;font-size:14px;margin-bottom:4px">${email.from || 'Unbekannt'}</div>
-        <div style="font-size:13px;color:#64748b;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${email.subject || '(Kein Betreff)'}</div>
-        <div style="font-size:12px;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${email.body || ''}</div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid #eef0f4">
-          <span style="font-size:11px;color:#94a3b8">${email.date || ''}</span>
-          ${badge}
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  emailList.querySelectorAll('.email-item').forEach(el => {
-    el.addEventListener('click', () => {
-      const emailId = el.dataset.emailId;
-      const email = emails.find(e => e.id === emailId);
-      if (email) openEmailModal(email);
-    });
-  });
-}
-
-function displayEmailsPlaceholder() {
-  const emailList = document.getElementById('emailList');
-  const emailCount = document.getElementById('emailCount');
-  
-  emailCount.textContent = '0';
-  emailList.innerHTML = `
-    <div style="text-align:center;color:var(--muted);padding:20px">
-      <div style="font-size:48px;margin-bottom:12px">📧</div>
-      <div style="font-weight:600;margin-bottom:8px">Gmail nicht verbunden</div>
-      <div style="font-size:14px;margin-bottom:16px">Verbinden Sie Ihr Gmail-Konto</div>
-      <button class="btn small" onclick="window.location.href='/api/gmail/auth'">Gmail verbinden</button>
-    </div>
-  `;
-}
-
-function openEmailModal(email) {
-  currentEmail = email;
-  document.getElementById('emailDetailFrom').textContent = email.from || 'Unbekannt';
-  document.getElementById('emailDetailSubject').textContent = email.subject || '(Kein Betreff)';
-  document.getElementById('emailDetailDate').textContent = email.date || '';
-  document.getElementById('emailDetailBody').textContent = email.body || '';
-  
-  const select = document.getElementById('assignBookingSelect');
-  select.innerHTML = '<option value="">Keine Zuweisung</option>' + 
-    bookings.map(b => `<option value="${b.id}" ${b.id === email.booking_id ? 'selected' : ''}>${b.guest} (${formatDateEU(b.start)})</option>`).join('');
-  
-  document.getElementById('emailOverlay').style.display = 'flex';
-}
-
-function closeEmailModal() {
-  document.getElementById('emailOverlay').style.display = 'none';
-  currentEmail = null;
-}
-
-// Email Templates
-function getPaymentReminderTemplate(booking) {
-  const nights = calculateNights(booking.start, booking.end);
-  const touristTax = nights * booking.adults * 5;
-  const total = parseFloat(booking.amount || 0) + touristTax;
-  
-  return {
-    to: booking.email,
-    subject: `Anzahlungserinnerung - ${formatDateEU(booking.start)} - ${formatDateEU(booking.end)}`,
-    body: `Sehr geehrte/r ${booking.guest},
-
-vielen Dank für Ihre Buchung!
-
-📅 Aufenthalt: ${formatDateEU(booking.start)} bis ${formatDateEU(booking.end)} (${nights} Nächte)
-👥 Gäste: ${booking.adults} Erwachsene${booking.children > 0 ? `, ${booking.children} Kinder` : ''}
-
-💰 Gesamtpreis: €${total.toFixed(2)}
-   Anzahlung: €${parseFloat(booking.depositAmount || 0).toFixed(2)}
-
-Mit freundlichen Grüßen
-Ihr Chalet-Team`
-  };
-}
-
-function getWelcomeEmailTemplate(booking) {
-  const nights = calculateNights(booking.start, booking.end);
-  
-  return {
-    to: booking.email,
-    subject: `Willkommen! ${formatDateEU(booking.start)} - ${formatDateEU(booking.end)}`,
-    body: `Liebe/r ${booking.guest},
-
-wir freuen uns auf Ihren Besuch! 🏔️
-
-📋 Ihre Buchungsdetails:
-   Anreise: ${formatDateEU(booking.start)} ab 16:00 Uhr
-   Abreise: ${formatDateEU(booking.end)} bis 10:00 Uhr
-   Dauer: ${nights} Nächte
-
-Herzliche Grüße
-Ihr Chalet-Team`
-  };
-}
-
-function openComposeModal(to, subject, body) {
-  document.getElementById('composeTo').value = to || '';
-  document.getElementById('composeSubject').value = subject || '';
-  document.getElementById('composeBody').value = body || '';
-  document.getElementById('composeOverlay').style.display = 'flex';
-}
-
-function closeComposeModal() {
-  document.getElementById('composeOverlay').style.display = 'none';
-}
-
-async function loadInvoices() {
-  invoices = await loadData('invoices');
-  
-  if (invoices.length > 0) {
-    const maxNum = Math.max(...invoices.map(inv => parseInt(inv.number.split('/')[0]) || 0));
-    nextInvoiceNumber = maxNum + 1;
-  }
-}
-
-async function loadFolders() {
-  folders = await loadData('folders');
-  
-  const currentYear = new Date().getFullYear();
-  if (!folders.find(f => f.name === currentYear.toString() && !f.parent)) {
-    folders.push({
-      id: 'folder_' + Date.now(),
-      name: currentYear.toString(),
-      parent: null,
-      created: new Date().toISOString()
-    });
-    await saveData('folders', folders);
-  }
-}
-
-function getOrCreateFolderForDate(date) {
-  const d = new Date(date);
-  const year = d.getFullYear().toString();
-  const monthName = d.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
-  
-  let yearFolder = folders.find(f => f.name === year && !f.parent);
-  if (!yearFolder) {
-    yearFolder = {
-      id: 'folder_year_' + Date.now(),
-      name: year,
-      parent: null,
-      created: new Date().toISOString()
-    };
-    folders.push(yearFolder);
-  }
-  
-  let monthFolder = folders.find(f => f.name === monthName && f.parent === yearFolder.id);
-  if (!monthFolder) {
-    monthFolder = {
-      id: 'folder_month_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-      name: monthName,
-      parent: yearFolder.id,
-      created: new Date().toISOString()
-    };
-    folders.push(monthFolder);
-  }
-  
-  return monthFolder.id;
-}
-
-async function saveInvoice(invoice) {
-  invoices.push(invoice);
-  await saveData('invoices', invoices);
-  await loadInvoices();
-  updateInvoiceStats();
-  renderInvoices();
-  return true;
-}
-
-async function deleteInvoice(invoiceId) {
-  invoices = invoices.filter(inv => inv.id !== invoiceId);
-  await saveData('invoices', invoices);
-  updateInvoiceStats();
-  renderInvoices();
-  return true;
-}
-
-async function saveFolder(folder) {
-  folders.push(folder);
-  await saveData('folders', folders);
-  renderFolders();
-  return true;
-}
-
-// Calendar
-function buildMonth(date) {
-  const calGrid = document.getElementById('calGrid');
-  if (!calGrid) return;
-
-  calGrid.innerHTML = '';
-  const y = date.getFullYear();
-  const m = date.getMonth();
-  const first = new Date(y, m, 1);
-  const startOffset = (first.getDay() + 6) % 7;
-  const daysInMonth = new Date(y, m + 1, 0).getDate();
-
-  document.getElementById('calTitle').textContent = first.toLocaleDateString('de-AT', { month: 'long', year: 'numeric' });
-
-  const dows = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
-  dows.forEach(txt => {
-    const el = document.createElement('div');
-    el.className = 'dow';
-    el.textContent = txt;
-    calGrid.appendChild(el);
-  });
-
-  for (let i = 0; i < startOffset; i++) {
-    const empty = document.createElement('div');
-    empty.className = 'cell';
-    calGrid.appendChild(empty);
-  }
-
-  for (let d = 1; d <= daysInMonth; d++) {
-    const cell = document.createElement('div');
-    cell.className = 'cell';
-    const dateLabel = document.createElement('span');
-    dateLabel.className = 'date';
-    dateLabel.textContent = d;
-    cell.appendChild(dateLabel);
-    cell.dataset.date = `${y}-${pad(m + 1)}-${pad(d)}`;
-    calGrid.appendChild(cell);
-  }
-
-  const cellByDate = {};
-  document.querySelectorAll('.cell[data-date]').forEach(c => {
-    cellByDate[c.dataset.date] = c;
-  });
-
-  function eachDate(fromISO, toISO) {
-    const out = [];
-    let d = new Date(fromISO + 'T00:00:00');
-    const end = new Date(toISO + 'T00:00:00');
-    while (d <= end) {
-      out.push(iso(d));
-      d.setDate(d.getDate() + 1);
-    }
-    return out;
-  }
-
-  bookings.forEach(b => {
-    const dates = eachDate(b.start, b.end);
-    const bookingColor = getBookingColor(b.guest);
-    dates.forEach((dayIso) => {
-      const cell = cellByDate[dayIso];
-      if (!cell) return;
-      const seg = document.createElement('div');
-      seg.className = 'seg ' + (b.status === 'confirm' ? 'confirm' : 'pending');
-      seg.style.backgroundColor = bookingColor;
-      seg.innerHTML = `${b.guest}`;
-      seg.addEventListener('click', () => openBookingModal(b));
-      cell.appendChild(seg);
-    });
-  });
-}
-
-function updateNextAppointment() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  const upcoming = bookings
-    .filter(b => {
-      const start = new Date(b.start);
-      start.setHours(0, 0, 0, 0);
-      return start >= today;
-    })
-    .sort((a, b) => new Date(a.start) - new Date(b.start));
-  
-  const widget = document.getElementById('nextAppointment');
-  if (!widget) return;
-  
-  if (upcoming.length > 0) {
-    const next = upcoming[0];
-    const startDate = new Date(next.start);
-    const isToday = startDate.getTime() === today.getTime();
-    
-    widget.innerHTML = `
-      <div>
-        <div style="color:var(--muted);font-size:14px">${next.guest} — ${isToday ? 'Heute' : formatDateEU(next.start)} Anreise</div>
-      </div>
-      <span class="tag ${next.status}">${next.status === 'confirm' ? 'BESTÄTIGT' : 'AUSSTEHEND'}</span>
-    `;
-    
-    widget.style.cursor = 'pointer';
-    widget.onclick = () => {
-      const bookingDate = new Date(next.start);
-      view = new Date(bookingDate.getFullYear(), bookingDate.getMonth(), 1);
-      buildMonth(view);
-    };
-  } else {
-    widget.innerHTML = `
-      <div>
-        <div style="color:var(--muted);font-size:14px">Keine bevorstehenden Buchungen</div>
-      </div>
-      <span class="tag confirm">—</span>
-    `;
-    widget.style.cursor = 'default';
-    widget.onclick = null;
-  }
-}
-
-// Booking modal
-function openBookingModal(b) {
-  currentBooking = b;
-  isNewBooking = false;
-  document.getElementById('bookingOverlay').style.display = 'flex';
-  
-  document.getElementById('mTitle').textContent = b.guest || 'Buchung';
-  document.getElementById('mGuest').value = b.guest || '';
-  document.getElementById('mStatus').value = b.status || 'pending';
-  document.getElementById('mStart').value = b.start || '';
-  document.getElementById('mEnd').value = b.end || '';
-  document.getElementById('mEmail').value = b.email || '';
-  document.getElementById('mPhone').value = b.phone || '';
-  document.getElementById('mAddress').value = b.address || '';
-  document.getElementById('mAdults').value = b.adults || 2;
-  document.getElementById('mChildren').value = b.children || 0;
-  document.getElementById('mAmount').value = b.amount || '';
-  document.getElementById('mDeposit').value = b.depositAmount || '';
-  document.getElementById('mNotes').value = b.notes || '';
-
-  document.getElementById('deleteBtn').style.display = b.id ? 'inline-flex' : 'none';
-  document.getElementById('generateInvoiceBtn').style.display = 'inline-flex';
-
-  updateBookingEmails();
-  
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelector('.tab[data-tab="details"]').classList.add('active');
-  document.getElementById('tabDetails').style.display = 'block';
-  document.getElementById('tabEmails').style.display = 'none';
-}
-
-function openNewBookingModal() {
-  currentBooking = null;
-  isNewBooking = true;
-  document.getElementById('bookingOverlay').style.display = 'flex';
-  
-  document.getElementById('mTitle').textContent = 'Neue Buchung';
-  document.getElementById('mGuest').value = '';
-  document.getElementById('mStatus').value = 'pending';
-  document.getElementById('mStart').value = '';
-  document.getElementById('mEnd').value = '';
-  document.getElementById('mEmail').value = '';
-  document.getElementById('mPhone').value = '';
-  document.getElementById('mAddress').value = '';
-  document.getElementById('mAdults').value = '2';
-  document.getElementById('mChildren').value = '0';
-  document.getElementById('mAmount').value = '';
-  document.getElementById('mDeposit').value = '';
-  document.getElementById('mNotes').value = '';
-
-  document.getElementById('deleteBtn').style.display = 'none';
-  document.getElementById('generateInvoiceBtn').style.display = 'none';
-  
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelector('.tab[data-tab="details"]').classList.add('active');
-  document.getElementById('tabDetails').style.display = 'block';
-  document.getElementById('tabEmails').style.display = 'none';
-}
-
-function closeBookingModal() {
-  document.getElementById('bookingOverlay').style.display = 'none';
-  currentBook
+  <script src="app.js"></script>
+</body>
+</html>
